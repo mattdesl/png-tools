@@ -1,0 +1,60 @@
+{
+  "name": "png-tools",
+  "version": "1.0.0",
+  "description": "print quality PNG re-encoder",
+  "main": "index.js",
+  "license": "MIT",
+  "type": "module",
+  "author": {
+    "name": "Matt DesLauriers",
+    "url": "https://github.com/mattdesl"
+  },
+  "devDependencies": {
+    "buffer": "^6.0.3",
+    "canvas-sketch": "^0.7.7",
+    "esbuild": "^0.21.3",
+    "icc": "^3.0.0",
+    "pako": "^2.1.0",
+    "tape": "^5.7.5",
+    "vite": "^5.2.11"
+  },
+  "scripts": {
+    "test": "brittle test/test.js"
+  },
+  "keywords": [
+    "png",
+    "encoder",
+    "ppi",
+    "pixelsPerInch",
+    "dpi",
+    "pHYs",
+    "iCCP",
+    "chunk",
+    "chunks",
+    "metadata",
+    "exif",
+    "tag",
+    "encoding",
+    "resolution",
+    "color",
+    "profile",
+    "embedded"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/mattdesl/png-tools.git"
+  },
+  "homepage": "https://github.com/mattdesl/png-tools",
+  "bugs": {
+    "url": "https://github.com/mattdesl/png-tools/issues"
+  },
+  "dependencies": {
+    "brittle": "^3.5.2",
+    "canvas-dimensions": "^1.0.0",
+    "convert-length": "^1.0.1",
+    "fast-png": "^6.2.0",
+    "fflate": "^0.8.2",
+    "jscolorengine": "^1.0.4",
+    "lcms-wasm": "^1.0.2"
+  }
+}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>benchmark</title>
+  </head>
+  <body>
+    <div>
+      <pre class="info"></pre>
+    </div>
+    <select>
+      <option value="worker">Worker</option>
+      <option value="file">FileSystemAPI</option>
+      <option value="canvas">Canvas (8bit)</option>
+      <option value="cpu">CPU</option>
+      <option value="fast-png">FastPNG</option>
+    </select>
+    <button class="encode" disabled>Generating PNG Data</button>
+    <button class="cancel" disabled>Cancel</button>
+    <pre class="status"></pre>
+    <!-- <div class="canvas-container"></div> -->
+    <div class="image-container">
+      <img src="" class="image" style="width: auto; height: 250px" />
+    </div>
+    <script type="module" src="./benchmark/main.js"></script>
+  </body>
+</html>

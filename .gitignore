@@ -1,0 +1,9 @@
+bower_components
+node_modules
+*.log
+.DS_Store
+
+profiles/
+test/fixtures/icc
+test/fixtures/
+!test/fixtures/png/*.png
