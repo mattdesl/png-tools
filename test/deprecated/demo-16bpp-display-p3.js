@@ -1,12 +1,12 @@
 import { deflate } from "pako";
 import { encode } from "fast-png";
 import { parse as parseICC } from "icc";
-import { encode_iCCP, encode_pHYs_PPI, withoutChunks } from "../src/util.js";
+import { encode_iCCP, encode_pHYs_PPI, withoutChunks } from "../../src/util.js";
 import {
   extractChunks,
   encodeChunks,
 } from "../src/png-metadata-writer/index.js";
-import iccTransform from "./util/icc-transform.js";
+import iccTransform from "../util/icc-transform.js";
 import getDocument from "canvas-dimensions";
 import fs from "node:fs/promises";
 

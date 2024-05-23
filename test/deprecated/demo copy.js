@@ -16,7 +16,7 @@ import {
   encode_iTXt,
   encode_pHYs_PPI,
   withoutChunks,
-} from "../src/util.js";
+} from "../../src/util.js";
 import { Buffer } from "buffer";
 import paperSizes from "../src/paper-sizes.js";
 import convert from "convert-length";

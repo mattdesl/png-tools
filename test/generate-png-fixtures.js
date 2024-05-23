@@ -1,5 +1,5 @@
 import { pngs } from "./png-fixtures.js";
-import { encode } from "fast-png";
+import { encode } from "fast-png"; // use a known encoder
 import fs from "fs/promises";
 
 for (let i = 0; i < pngs.length; i++) {

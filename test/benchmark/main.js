@@ -5,14 +5,18 @@ import * as FastPNG from "fast-png";
 import {
   encode,
   ColorType,
-  FilterType,
+  FilterMethod,
   ChunkType,
   encodeChunks,
   decodeChunks,
   withoutChunks,
 } from "../../src/png-io.js";
-import { colorTypeToChannels, encode_pHYs_PPI } from "../../src/util.js";
-import { canvasToBuffer, downloadBlob, flattenBuffers } from "../../save.js";
+import {
+  colorTypeToChannels,
+  encode_pHYs_PPI,
+  flattenBuffers,
+} from "../../src/util.js";
+import { canvasToBuffer, downloadBlob } from "../../examples/util/save.js";
 import prettyBytes from "pretty-bytes";
 
 const params = {
@@ -21,7 +25,7 @@ const params = {
   units: "cm",
   depth: 16,
   colorType: ColorType.RGBA,
-  filter: FilterType.Paeth,
+  filter: FilterMethod.Paeth,
 };
 
 const { canvasWidth: width, canvasHeight: height } = getDimensions({

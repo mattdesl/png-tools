@@ -1,3 +1,7 @@
+export const PNG_HEADER = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
 export const Intent = {
   Perceptual: 0,
   Relative: 1, // Relative colorimetric
@@ -5,7 +9,7 @@ export const Intent = {
   Absolute: 3, // Aboslute colorimetric
 };
 
-export const FilterType = {
+export const FilterMethod = {
   None: 0x00,
   Sub: 0x01,
   Up: 0x02,

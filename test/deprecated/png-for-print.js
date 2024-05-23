@@ -20,7 +20,7 @@ import {
   encode_standardChromatics,
   encode_standardGamma,
   withoutChunks,
-} from "../src/util.js";
+} from "../../src/util.js";
 import { Buffer } from "buffer";
 import paperSizes from "../src/paper-sizes.js";
 import convert from "convert-length";

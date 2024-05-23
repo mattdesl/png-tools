@@ -11,7 +11,7 @@ import {
   encode_standardChromatics,
   encode_standardGamma,
   encode_pHYs_PPI,
-} from "../src/util.js";
+} from "../../src/util.js";
 import fs from "fs/promises";
 import { parse as parseICC } from "icc";
 import { inflate, deflate } from "pako";

@@ -2,7 +2,7 @@
   "name": "png-tools",
   "version": "1.0.0",
   "description": "print quality PNG re-encoder",
-  "main": "index.js",
+  "main": "./index.js",
   "license": "MIT",
   "type": "module",
   "author": {
@@ -20,7 +20,7 @@
     "vite": "^5.2.11"
   },
   "scripts": {
-    "demo": "vite serve ./test/"
+    "test": "node test/test.js"
   },
   "keywords": [
     "png",

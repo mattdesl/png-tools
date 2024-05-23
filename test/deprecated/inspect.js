@@ -3,7 +3,7 @@
 
 import { decode } from "fast-png";
 import { extractChunks } from "../src/png-metadata-writer/index.js";
-import { decode_iCCP, decode_iTXt } from "../src/util.js";
+import { decode_iCCP, decode_iTXt } from "../../src/util.js";
 import fs from "fs/promises";
 import { parse as parseICC } from "icc";
 import { inflate } from "pako";
