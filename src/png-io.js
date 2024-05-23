@@ -5,53 +5,33 @@ import {
   encode_IDAT_raw,
   encode_IHDR,
 } from "./util.js";
+import { Intent, ColorType, ChunkType, FilterType } from "./constants.js";
+
+export { Intent, ColorType, ChunkType, FilterType };
 
 const PNG_HEADER = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]);
 
-const noop = () => {};
-
-export const ColorType = {
-  GRAYSCALE: 1,
-  RGB: 2,
-  INDEXED: 3,
-  GRAYSCALE_ALPHA: 4,
-  RGBA: 6,
-};
-
-// 4 byte chunk codes in Uint32 decimal
-export const ChunkType = {
-  // Critical chunks
-  IHDR: 0x49484452,
-  PLTE: 0x504c5445,
-  IDAT: 0x49444154,
-  IEND: 0x49454e44,
-  // Ancillary Chunks
-  cHRM: 0x6348524d,
-  gAMA: 0x67414d41,
-  iCCP: 0x69434350,
-  sBIT: 0x73424954,
-  sRGB: 0x73524742,
-  bKGD: 0x624b4744,
-  hIST: 0x68495354,
-  tRNS: 0x74524e53,
-  pHYs: 0x70485973,
-  sPLT: 0x73504c54,
-  tIME: 0x74494d45,
-  iTXt: 0x69545874,
-  tEXt: 0x74455874,
-  zTXt: 0x7a545874,
-};
-
 export function matchesChunkType(a, b) {
+  if (a == null || b == null)
+    throw new Error(
+      `chunk type does not exist; maybe a spelling mistake in ChunkType enum?`
+    );
   const aType = typeof a === "string" ? chunkNameToType(a) : a;
   const bType = typeof b === "string" ? chunkNameToType(b) : b;
   return aType === bType;
 }
 
 export function chunkFilter(type) {
-  return (c) => matchesChunkType(c.type, type);
+  if (!type) throw new Error("Must specify a type parameter");
+  const types = Array.isArray(type) ? type : [type];
+  return (c) => types.some((n) => matchesChunkType(c.type, n));
+}
+
+export function withoutChunks(chunks, type) {
+  const filter = chunkFilter(type);
+  return chunks.filter((c) => !filter(c));
 }
 
 export function chunkTypeToName(type) {
@@ -84,11 +64,17 @@ export function decodeChunks(buf, opts = {}) {
 }
 
 export function encode(options = {}, deflate, deflateOptions) {
-  const { data } = options;
+  const { data, ancillary = [], colorType = ColorType.RGBA } = options;
   if (!data) throw new Error(`must specify { data }`);
   if (!deflate) throw new Error(`must specify a deflate function`);
+  if (colorType !== ColorType.RGB && colorType !== ColorType.RGBA) {
+    throw new Error(
+      "only RGB or RGBA colorType encoding is currently supported"
+    );
+  }
   return encodeChunks([
     { type: ChunkType.IHDR, data: encode_IHDR(options) },
+    ...ancillary,
     {
       type: ChunkType.IDAT,
       data: deflate(encode_IDAT_raw(data, options), deflateOptions),
@@ -96,75 +82,6 @@ export function encode(options = {}, deflate, deflateOptions) {
     { type: ChunkType.IEND },
   ]);
 }
-
-// export async function encodeAsync(options = {}, deflateAsync, deflateOptions) {
-//   const { data } = options;
-//   if (!data) throw new Error(`must specify { data }`);
-//   if (!deflateAsync) throw new Error(`must specify a deflateAsync function`);
-//   return encodeChunks([
-//     { type: ChunkType.IHDR, data: encode_IHDR(options) },
-//     {
-//       type: ChunkType.IDAT,
-//       data: await deflateAsync(encode_IDAT_raw(data, options), deflateOptions),
-//     },
-//     { type: ChunkType.IEND },
-//   ]);
-// }
-
-export async function EncoderStream(options, writer) {
-  let finished = false;
-
-  // writer headers
-  await writer.write(PNG_HEADER);
-  await writer.write(
-    encodeChunk({ type: ChunkType.IHDR, data: encode_IHDR(options) })
-  );
-
-  return {
-    async writeChunk(chunk) {
-      return writer.write(encodeChunk(chunk));
-    },
-    async writePixelData(pixels, deflate, deflateOptions) {
-      if (finished)
-        throw new Error(`must call writePixelData() before finish()`);
-      return this.writeIDAT(
-        deflate(encode_IDAT_raw(pixels, options), deflateOptions)
-      );
-    },
-    async writeIDAT(compressedIDAT) {
-      if (finished) throw new Error(`must call writeIDAT() before finish()`);
-      return this.writeChunk({ type: ChunkType.IDAT, data: compressedIDAT });
-    },
-    async finish() {
-      if (finished) throw new Error(`cannot call finish() twice`);
-      finished = true;
-      return this.writeChunk({ type: ChunkType.IEND });
-    },
-  };
-}
-
-// export function StreamingEncoder(writer) {
-//   return {
-//     async writeHeader() {
-//       await writer.write(PNG_HEADER);
-//     },
-//     async writeChunk(chunk) {
-// const length = chunk.data ? chunk.data.length : 0;
-// const output = new Uint8Array(4 + length + 4 + 4);
-// const dv = new DataView(
-//   output.buffer,
-//   output.byteOffset,
-//   output.byteLength
-// );
-// // Write chunk length
-// let idx = 0;
-// return writeChunk(output, dv, chunk, idx);
-//     },
-//     async finish () {
-
-//     }
-//   };
-// }
 
 function writeChunk(output, dv, chunk, idx = 0) {
   // Write chunk length
@@ -231,7 +148,7 @@ export function encodeChunks(chunks) {
   return output;
 }
 
-export function readPNGMetadata(buf, opts = {}) {
+export function readIHDR(buf, opts = {}) {
   let meta = {};
   pngChunkReader(buf, opts, (type, view) => {
     if (type === ChunkType.IHDR) {
@@ -242,7 +159,7 @@ export function readPNGMetadata(buf, opts = {}) {
   return meta;
 }
 
-export function pngChunkReader(buf, opts = {}, read = noop) {
+export function pngChunkReader(buf, opts = {}, read = () => {}) {
   if (!ArrayBuffer.isView(buf)) {
     throw new Error("Expected a typed array such as Uint8Array");
   }

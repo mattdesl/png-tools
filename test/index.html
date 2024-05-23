@@ -4,21 +4,37 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>benchmark</title>
+    <style>
+      body {
+        padding: 20px;
+        font-family: monospace;
+        font-size: 15px;
+      }
+      .status {
+        margin-top: 20px;
+        margin-bottom: 10px;
+        line-height: 1.5;
+        font-size: 13px;
+      }
+    </style>
   </head>
   <body>
     <div>
+      <h4>canvas params:</h4>
       <pre class="info"></pre>
     </div>
     <select>
       <option value="worker">Worker</option>
       <option value="file">FileSystemAPI</option>
-      <option value="canvas">Canvas (8bit)</option>
+      <option value="canvas">Canvas (8bit only)</option>
       <option value="cpu">CPU</option>
-      <option value="fast-png">FastPNG</option>
+      <option value="fast-png">fast-png</option>
     </select>
     <button class="encode" disabled>Generating PNG Data</button>
     <button class="cancel" disabled>Cancel</button>
-    <pre class="status"></pre>
+    <button class="download" disabled>Download</button>
+
+    <div class="status"></div>
     <!-- <div class="canvas-container"></div> -->
     <div class="image-container">
       <img src="" class="image" style="width: auto; height: 250px" />

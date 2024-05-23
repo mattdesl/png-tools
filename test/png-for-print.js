@@ -10,7 +10,7 @@ import {
 import { decode, encode } from "fast-png";
 import { parse as parseICC } from "icc";
 import {
-  Intents,
+  Intent,
   decodeProfileData,
   decode_iCCP,
   encode_iCCP,
@@ -26,7 +26,7 @@ import paperSizes from "../src/paper-sizes.js";
 import convert from "convert-length";
 
 export default function pngForPrint(pngBuffer, opts = {}) {
-  const { pixelsPerInch, colorSpace, intent = Intents.Perceptual } = opts;
+  const { pixelsPerInch, colorSpace, intent = Intent.Perceptual } = opts;
   const { width, height, data, depth } = decode(pngBuffer);
   if (depth !== 8) throw new Error("Currently only 8-bit depth is supported");
   let chunks = extractChunks(pngBuffer);

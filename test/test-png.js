@@ -20,20 +20,84 @@ import {
   chunkNameToType,
   matchesChunkType,
   ChunkType,
-  readPNGMetadata,
+  readIHDR,
+  FilterType,
   ColorType,
 } from "../src/png-io.js";
+
+test("profile data", async (t) => {
+  const enc = encode_iCCP({
+    name: "Some Profile",
+    data: new Uint8Array([4, 3, 1, 2]),
+  });
+  const data = decode_iCCP(enc);
+  t.equals(data.name, "Some Profile");
+  t.equals(data.compression, 0);
+  t.deepEquals(data.data, new Uint8Array([4, 3, 1, 2]));
+
+  const long =
+    "Some Profile With a Really Long Name This is Long Again Some Profile With a Really Long Name This is Long";
+  const enc2 = encode_iCCP({ name: long, data: new Uint8Array([4, 3, 1, 2]) });
+  const data2 = decode_iCCP(enc2);
+  t.equals(data2.name.length, 79);
+  t.deepEquals(data2.compression, 0);
+  t.deepEquals(data2.data, new Uint8Array([4, 3, 1, 2]));
+});
+
+test("iTXt data", async (t) => {
+  const enc = encode_iTXt({
+    keyword: "metadata",
+    compressionFlag: 0,
+    compressionMethod: 0,
+    languageTag: "en",
+    translatedKeyword: "test",
+    text: "hello world",
+  });
+  const data = decode_iTXt(enc);
+  t.deepEquals(data, {
+    keyword: "metadata",
+    compressionFlag: 0,
+    compressionMethod: 0,
+    languageTag: "en",
+    translatedKeyword: "test",
+    text: "hello world",
+  });
+});
+
+test("iTXt data", async (t) => {
+  const enc = encode_IHDR({
+    width: 256,
+    height: 121,
+    depth: 16,
+    colorType: ColorType.GRAYSCALE,
+    interlace: 1,
+  });
+  const data = decode_IHDR(enc);
+  t.deepEquals(data, {
+    width: 256,
+    height: 121,
+    depth: 16,
+    colorType: ColorType.GRAYSCALE,
+    compression: 0,
+    filter: 0,
+    interlace: 1,
+  });
+});
 
 test("encoder matches", async (t) => {
   for (let i = 0; i < pngs.length; i++) {
     const colorType = pngs[i].channels === 4 ? ColorType.RGBA : ColorType.RGB;
     const input = pngs[i];
     const enc0 = FastPNG.encode(input);
-    const enc1 = encode({
-      ...input,
-      colorType,
-      deflate: (d) => deflate(d, { level: 3 }),
-    });
+    const enc1 = encode(
+      {
+        ...input,
+        filter: FilterType.None,
+        colorType,
+      },
+      deflate,
+      { level: 3 }
+    );
     const c0 = decodeChunks(enc0).find((f) =>
       matchesChunkType(f.type, ChunkType.IDAT)
     );
@@ -45,16 +109,22 @@ test("encoder matches", async (t) => {
       Buffer.from(inflate(c1.data))
     );
     t.ok(eq, "buffer equals idx " + i);
-    // if (i) {
-    // console.log("i 4");
-    // console.log(inflate(c0.data));
-    // console.log(inflate(c1.data));
-    // }
-    // if (i == 4) console.log(inflate(c0.data));
-    // console.log("idx", i);
-    // console.log(inflate(c0.data), inflate(c1.data));
-    // console.log(enc0, enc1);
-    // t.ok(Buffer.from(enc0).equals(Buffer.from(enc1)), "buffers equal idx " + i);
+  }
+});
+
+test("test png encoder filtering", async (t) => {
+  const arr = pngs;
+  for (let i = 0; i < arr.length; i++) {
+    const colorType = arr[i].channels === 4 ? ColorType.RGBA : ColorType.RGB;
+    const input = arr[i];
+    const filters = Object.values(FilterType);
+    for (let f of filters) {
+      const enc = encode({ ...input, colorType, filter: f }, deflate, {
+        level: 3,
+      });
+      const { data } = FastPNG.decode(enc);
+      t.deepEqual(input.data, data, `img ${i} filter ${f}`);
+    }
   }
 });
 
@@ -84,7 +154,7 @@ test("our png decoder works", async (t) => {
   for (let i = 0; i < pngs.length; i++) {
     const png = pngs[i];
     const buf = await fs.readFile(`test/fixtures/png/generated-${i}.png`);
-    const meta = readPNGMetadata(buf);
+    const meta = readIHDR(buf);
     t.equals(meta.width, png.width);
     t.equals(meta.height, png.height);
     t.equals(meta.depth, png.depth);
@@ -96,7 +166,7 @@ test("our png decoder works", async (t) => {
   inputLargerBuf.set(inputBuf, 4);
   const subBuf = inputLargerBuf.subarray(4, 4 + inputBuf.length);
   t.deepEqual(
-    readPNGMetadata(subBuf),
+    readIHDR(subBuf),
     {
       width: 2,
       height: 2,

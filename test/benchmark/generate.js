@@ -23,6 +23,7 @@ self.onmessage = async (msg) => {
     data.copyWithin(idx * channels, 0, width * channels);
   }
 
+  // A much slower gradient but more pretty, using more colours
   // for (let y = 0, i = 0; y < height; y++) {
   //   for (let x = 0; x < width; x++, i++) {
   //     const u = (x + 1) / width;
@@ -42,13 +43,7 @@ self.onmessage = async (msg) => {
     return min * (1 - t) + max * t;
   }
 
-  function lerpArray(min, max, t, out) {
-    out = out || [];
-    if (min.length !== max.length) {
-      throw new TypeError(
-        "min and max array are expected to have the same length"
-      );
-    }
+  function lerpArray(min, max, t, out = []) {
     for (var i = 0; i < min.length; i++) {
       out[i] = lerp(min[i], max[i], t);
     }

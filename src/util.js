@@ -1,10 +1,5 @@
+import { ColorType, ChunkType, FilterType } from "./constants.js";
 // import convert from 'convert-length';
-export const Intents = {
-  Perceptual: 0,
-  Relative: 1, // Relative colorimetric
-  Saturation: 2,
-  Absolute: 3, // Aboslute colorimetric
-};
 
 export function decode_IHDR(data) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
@@ -39,8 +34,8 @@ export function encode_IHDR(data) {
   off += 4;
   dv.setUint8(off++, data.depth ?? 8);
   dv.setUint8(off++, data.colorType ?? 6);
-  dv.setUint8(off++, data.compression || 0);
-  dv.setUint8(off++, data.filter || 0);
+  dv.setUint8(off++, 0); // Only compression type 0 is defined
+  dv.setUint8(off++, 0); // Only filter type 0 is defined
   dv.setUint8(off++, data.interlace || 0);
   return buf;
 }
@@ -209,63 +204,163 @@ function convertStringToBytes(val) {
   return data;
 }
 
-export function withoutChunks(chunks, nameFilter) {
-  if (typeof nameFilter === "string") nameFilter = [nameFilter];
-  return chunks.filter((c) => !nameFilter.includes(c.name));
-}
-
 export function encode_IDAT_raw(data, opts = {}) {
-  const { width, height, colorType, depth } = opts;
+  const width = opts.width;
+  const height = opts.height;
+  const depth = opts.depth;
+  const colorType = opts.colorType ?? ColorType.RGBA;
+  const filter = opts.filter ?? FilterType.Paeth;
   const channels = colorTypeToChannels(colorType);
-  if (depth !== 8 && depth !== 16)
+  if (depth !== 8 && depth !== 16) {
     throw new Error(`Unsupported bit depth ${depth}`);
+  }
 
   const bytesPerPixel = (depth / 8) * channels;
   const bytesPerScanline = width * bytesPerPixel;
   const elementsPerScanline = width * channels;
 
-  // const expectedByteLength = height * bytesPerScanline;
-  // if (data.byteLength !== expectedByteLength) {
-  //   throw new Error(
-  //     `Data size mismatch: expected ${expectedByteLength}, got ${data.byteLength}`
-  //   );
-  // }
-
-  const u8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   const scanlineCount = data.byteLength / bytesPerScanline;
-  if (scanlineCount % 1 !== 0)
+  if (scanlineCount % 1 !== 0) {
     throw new Error(`Bytes are not padded to channels and scanlines`);
-  if (scanlineCount > height)
+  }
+  if (scanlineCount > height) {
     throw new Error(
       "Expected scanline count to be less than total image height"
     );
-  const expectedByteLength = scanlineCount * bytesPerScanline;
+  }
+  if (filter < 0x00 || filter > 0x04) {
+    throw new Error(`filter type ${filter} unsupported`);
+  }
 
-  // additional amount to account for filter bytes at the beginning of each scanline
+  const expectedByteLength = scanlineCount * bytesPerScanline;
   const out = new Uint8Array(expectedByteLength + scanlineCount);
-  const outDV = new DataView(out.buffer, out.byteOffset, out.byteLength);
-  // now we need to write each scanline
-  for (let i = 0; i < scanlineCount; i++) {
-    // scanline size
-    const srcIdxInBytes = i * bytesPerScanline;
-    // scanline size + 1 byte for filter type
-    const dstIdxInBytes = i * (bytesPerScanline + 1);
-    // out[dstIdxInBytes] = 0; // Not needed as 0 is default
-    if (depth === 16) {
-      // Note: This works fine but it is slow since it touches each element
-      // It would be good to find a faster copy method
+
+  if (depth === 16) {
+    // Special case: we need to deal with endianness by converting input into big endian
+
+    // To handle filtering, we will keep track of two scanlines worth of BE packed data:
+    // The current scanline, and the previous
+    const packed = new Uint8Array(bytesPerScanline * 2);
+    const packedDV = new DataView(
+      packed.buffer,
+      packed.byteOffset,
+      packed.byteLength
+    );
+
+    for (let i = 0; i < scanlineCount; i++) {
+      const srcIdxInElements = i * elementsPerScanline;
+
+      // Shift the second half of the buffer toward the front
+      // The first half will be the 'above scanline' (initially 0)
+      packed.copyWithin(0, bytesPerScanline);
+
+      // now do the big packing into big endian format for this scanline
+      // making sure to place it in the second half of the buffer
       for (let j = 0; j < elementsPerScanline; j++) {
-        const v = data[i * elementsPerScanline + j];
-        outDV.setUint16(dstIdxInBytes + 1 + j * 2, v);
+        const v = data[srcIdxInElements + j];
+        packedDV.setUint16(bytesPerScanline + j * 2, v);
       }
-    } else {
-      out.set(
-        u8.subarray(srcIdxInBytes, srcIdxInBytes + bytesPerScanline),
-        dstIdxInBytes + 1
-      );
+
+      const dstIdxInBytes = i * (bytesPerScanline + 1);
+      const dstIdxInBytesPlusOne = dstIdxInBytes + 1;
+
+      // Note: the source here is the latter half of the temp 2-scanline array
+      const srcIdxInBytes = bytesPerScanline;
+
+      if (filter == FilterType.None) {
+        // fast mode, we can just copy the big endian bytes over to the output
+        // being sure to only copy the second half of the buffer (current scanline)
+        // and placing it after the filter (which doesn't need to be set, default 0x00)
+        out.set(packed.subarray(bytesPerScanline), dstIdxInBytesPlusOne);
+      } else {
+        out[dstIdxInBytes] = filter;
+        applyFilter(
+          out,
+          packed,
+          i,
+          filter,
+          bytesPerPixel,
+          bytesPerScanline,
+          srcIdxInBytes,
+          dstIdxInBytesPlusOne
+        );
+      }
+    }
+  } else {
+    // 8 bit is simpler, we can just copy data
+    for (let i = 0; i < scanlineCount; i++) {
+      // scanline size + 1 byte for filter type
+      const dstIdxInBytes = i * (bytesPerScanline + 1);
+      const dstIdxInBytesPlusOne = dstIdxInBytes + 1;
+      const srcIdxInBytes = i * bytesPerScanline;
+      if (filter == FilterType.None) {
+        // Copy each scanline over but with a 1 byte offset
+        // place after 1 byte offset to account for 0x00 filter (does not need to be set, buffer defaults to 0)
+        out.set(
+          data.subarray(srcIdxInBytes, srcIdxInBytes + bytesPerScanline),
+          dstIdxInBytesPlusOne
+        );
+      } else {
+        out[dstIdxInBytes] = filter;
+        applyFilter(
+          out,
+          data,
+          i,
+          filter,
+          bytesPerPixel,
+          bytesPerScanline,
+          srcIdxInBytes,
+          dstIdxInBytesPlusOne
+        );
+      }
     }
   }
+
   return out;
+}
+
+function applyFilter(
+  out,
+  data,
+  i,
+  filter,
+  bytesPerPixel,
+  bytesPerScanline,
+  srcIdxInBytes,
+  dstIdxInBytesPlusOne
+) {
+  if (filter == FilterType.Sub) {
+    for (let j = 0; j < bytesPerScanline; j++) {
+      const leftPixel =
+        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
+      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - leftPixel;
+    }
+  } else if (filter == FilterType.Up) {
+    for (let j = 0; j < bytesPerScanline; j++) {
+      const upPixel = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
+      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - upPixel;
+    }
+  } else if (filter === FilterType.Average) {
+    for (let j = 0; j < bytesPerScanline; j++) {
+      const left =
+        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
+      const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
+      const avg = (left + up) >> 1;
+      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - avg;
+    }
+  } else if (filter == FilterType.Paeth) {
+    for (let j = 0; j < bytesPerScanline; j++) {
+      const left =
+        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
+      const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
+      const upLeft =
+        i === 0 || j < bytesPerPixel
+          ? 0
+          : data[srcIdxInBytes + j - bytesPerScanline - bytesPerPixel];
+      out[dstIdxInBytesPlusOne + j] =
+        data[srcIdxInBytes + j] - paethPredictor(left, up, upLeft);
+    }
+  }
 }
 
 export function colorTypeToChannels(colorType) {
@@ -293,4 +388,14 @@ function* splitPixels(data, width, height, channels, splitCount) {
     const end = i === splitCount - 1 ? data.length : start + chunkSize;
     yield data.subarray(start, end);
   }
+}
+
+function paethPredictor(left, above, upLeft) {
+  let paeth = left + above - upLeft;
+  let pLeft = Math.abs(paeth - left);
+  let pAbove = Math.abs(paeth - above);
+  let pUpLeft = Math.abs(paeth - upLeft);
+  if (pLeft <= pAbove && pLeft <= pUpLeft) return left;
+  if (pAbove <= pUpLeft) return above;
+  return upLeft;
 }

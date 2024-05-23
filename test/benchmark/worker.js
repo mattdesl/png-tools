@@ -5,7 +5,7 @@ import {
   matchesChunkType,
   encodeHeader,
 } from "../../src/png-io";
-import { encode_IDAT_raw, encode_IHDR } from "../../src/util";
+import { encode_IDAT_raw, encode_IHDR, encode_pHYs_PPI } from "../../src/util";
 
 self.onmessage = async (msg) => {
   const options = msg.data;
@@ -21,6 +21,14 @@ self.onmessage = async (msg) => {
 
   // 2. Now post the metadata chunk
   postChunk(0, { type: ChunkType.IHDR, data: encode_IHDR(options) });
+
+  // 2a (optional) Include any ancillary chunks like pixelsPerInch, text...
+  if (options.pixelsPerInch) {
+    postChunk(0, {
+      type: ChunkType.pHYs,
+      data: encode_pHYs_PPI(options.pixelsPerInch),
+    });
+  }
 
   // 3. Now do deflate, and each time the deflator gets compressed data,
   // send it to the main thread as well for writing

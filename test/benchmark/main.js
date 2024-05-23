@@ -2,34 +2,88 @@ import getDimensions from "canvas-dimensions";
 import * as pako from "pako";
 import * as FastPNG from "fast-png";
 
-import { encode, ColorType } from "../../src/png-io.js";
-import { colorTypeToChannels } from "../../src/util.js";
+import {
+  encode,
+  ColorType,
+  FilterType,
+  ChunkType,
+  encodeChunks,
+  decodeChunks,
+  withoutChunks,
+} from "../../src/png-io.js";
+import { colorTypeToChannels, encode_pHYs_PPI } from "../../src/util.js";
 import { canvasToBuffer, downloadBlob, flattenBuffers } from "../../save.js";
+import prettyBytes from "pretty-bytes";
 
-import EncoderWorker from "./worker.js?worker";
+const params = {
+  dimensions: "A0",
+  pixelsPerInch: 150,
+  units: "cm",
+  depth: 16,
+  colorType: ColorType.RGBA,
+  filter: FilterType.Paeth,
+};
 
 const { canvasWidth: width, canvasHeight: height } = getDimensions({
-  dimensions: "A0",
-  pixelsPerInch: 300,
-  units: "cm",
+  ...params,
 });
 
-const depth = 8;
-const colorType = ColorType.RGBA;
+const colorTypeToString = (n) => {
+  const entries = Object.entries(ColorType);
+  return entries.find((e) => e[1] === n)[0];
+};
+
+const { depth, colorType, pixelsPerInch, filter } = params;
 const channels = colorTypeToChannels(colorType);
 
 const status = document.querySelector(".status");
 const cancel = document.querySelector(".cancel");
+const download = document.querySelector(".download");
+const img = document.querySelector(".image");
+let curBlob;
+
+download.onclick = (ev) => {
+  ev.preventDefault();
+  if (curBlob) downloadBlob(curBlob, { filename: "download.png" });
+};
+
 // let canvas = document.createElement("canvas");
 // const container = document.querySelector(".canvas-container");
 // container.appendChild(canvas);
+const updateStatus = (n) => {
+  let str;
+  if (n === "worker") str = "Use a WebWorker to encode off the main thread.";
+  else if (n === "file")
+    str =
+      "Use WebWorker + File System API to stream encode directly into a file on disk (Chrome only).";
+  else if (n === "canvas") {
+    str =
+      "Use Canvas2D toBlob() to encode a PNG, which only supports 8 bits per pixel.";
+  } else if (n === "cpu") {
+    str =
+      "Use the main thread (no worker) to encode, which is simpler but halts the UI, does not report progress, and cannot be cancelled.";
+  } else if (n === "fast-png") {
+    str = "Use the fast-png module to encode, for benchmark comparison.";
+  }
+  status.textContent = str;
+};
+
+const typeSelect = document.querySelector("select");
+typeSelect.oninput = (ev) => {
+  updateStatus(ev.currentTarget.value);
+  curBlob = null;
+  img.src = "";
+  download.setAttribute("disabled", true);
+};
+updateStatus(typeSelect.value);
 
 document.querySelector(".info").textContent = JSON.stringify(
   {
+    ...params,
+    colorType: colorTypeToString(colorType),
+    depth,
     width,
     height,
-    depth,
-    colorType,
   },
   null,
   2
@@ -48,6 +102,8 @@ async function encodeWorker(data, write, signal) {
     depth,
     colorType,
     data,
+    pixelsPerInch,
+    filter,
   };
   return new Promise((resolve) => {
     const worker = new Worker(new URL("./worker.js", import.meta.url), {
@@ -74,19 +130,44 @@ async function encodeWorker(data, write, signal) {
 }
 
 function encodeCPU(data) {
+  const ancillary = [];
+
+  // optionally embed resolution
+  if (pixelsPerInch) {
+    ancillary.push({
+      type: ChunkType.pHYs,
+      data: encode_pHYs_PPI(pixelsPerInch),
+    });
+  }
+
   const options = {
     width,
     height,
     data,
     depth,
     colorType,
+    ancillary,
+    filter,
   };
   return encode(options, pako.deflate, { level: 3 });
 }
 
 async function encodeCanvas(data) {
   const canvas = create8BitCanvas(data);
-  const buffer = await canvasToBuffer(canvas);
+  let buffer = await canvasToBuffer(canvas);
+  // if we have additional metadata, we can re-encode without having to re-compress
+  if (pixelsPerInch) {
+    let chunks = decodeChunks(buffer);
+    // strip out an existing pHYs chunk if it exists
+    chunks = withoutChunks(chunks, ChunkType.pHYs);
+    // include the new chunk
+    chunks.splice(1, 0, {
+      type: ChunkType.pHYs,
+      data: encode_pHYs_PPI(pixelsPerInch),
+    });
+    // re-encode the chunks (does not re-compress the data stream)
+    buffer = encodeChunks(chunks);
+  }
   return buffer;
 }
 
@@ -188,6 +269,7 @@ async function doEncode(data) {
   else cancel.setAttribute("disabled", true);
 
   const then = performance.now();
+  // console.profile("encode");
   if (type === "cpu") enc = encodeCPU(data);
   else if (type === "canvas") enc = await encodeCanvas(data);
   else if (type === "worker") enc = await encodeWorkerBuffered(data, signal);
@@ -195,6 +277,7 @@ async function doEncode(data) {
   else if (type === "fast-png") {
     enc = FastPNG.encode({ data, width, height, channels, depth });
   }
+  // console.profileEnd("encode");
   const now = performance.now();
 
   signal.removeEventListener("abort", onAbort);
@@ -206,16 +289,15 @@ async function doEncode(data) {
     status.textContent = "Cancelled";
   } else {
     const ms = Math.round(now - then);
-    const timeStr = `Time: ${ms} ms`;
+    const bytesSuffix = enc ? ` (Bytes: ${prettyBytes(enc.byteLength)})` : "";
+    const timeStr = `Time: ${ms} ms` + bytesSuffix;
     console.log(timeStr);
     status.textContent = timeStr;
 
     if (enc) {
-      const blob = new Blob([enc], { type: "image/png" });
-      downloadBlob(blob, { filename: "download.png" });
-
-      const img = document.querySelector(".image");
-      img.src = URL.createObjectURL(blob);
+      curBlob = new Blob([enc], { type: "image/png" });
+      download.removeAttribute("disabled");
+      img.src = URL.createObjectURL(curBlob);
     }
   }
 }
@@ -233,6 +315,7 @@ worker.addEventListener("message", (ev) => {
     btn.setAttribute("disabled", true);
     await new Promise((r) => setTimeout(r, 10));
     try {
+      console.log("encoding");
       await doEncode(ev.data.slice());
     } catch (err) {
       if (err.name != "AbortError") {
