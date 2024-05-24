@@ -81,7 +81,7 @@ export function encode_IHDR(data) {
   dv.setUint32(off, data.height);
   off += 4;
   dv.setUint8(off++, data.depth ?? 8);
-  dv.setUint8(off++, data.colorType ?? 6);
+  dv.setUint8(off++, data.colorType ?? ColorType.RGBA);
   dv.setUint8(off++, 0); // Only compression type 0 is defined
   dv.setUint8(off++, 0); // Only filter type 0 is defined
   dv.setUint8(off++, data.interlace || 0);
@@ -150,7 +150,7 @@ export function encode_iTXt(opts = {}) {
     keyword = "",
     compressionFlag = 0,
     compressionMethod = 0,
-    languageTag = "en",
+    languageTag = "",
     translatedKeyword = "",
     text = "",
   } = opts;
@@ -199,6 +199,22 @@ export function encode_pHYs({ x, y, unit = 1 } = {}) {
   return data;
 }
 
+export function decode_pHYs(data) {
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  return {
+    x: dv.getUint32(0),
+    y: dv.getUint32(4),
+    unit: dv.getUint8(8),
+  };
+}
+
+export function decode_pHYs_PPI(data) {
+  const { x, y, unit } = decode_pHYs(data);
+  if (x !== y) return null;
+  if (unit !== 1) return null;
+  return x * 0.0254;
+}
+
 export function encode_pHYs_PPI(pixelsPerInch) {
   // convert 1 m to px at N PPI
   const ppu = Math.round((1 / 0.0254) * pixelsPerInch);
@@ -208,9 +224,14 @@ export function encode_pHYs_PPI(pixelsPerInch) {
 export function encode_IDAT_raw(data, opts = {}) {
   const width = opts.width;
   const height = opts.height;
-  const depth = opts.depth;
+  const depth = opts.depth ?? 8;
   const colorType = opts.colorType ?? ColorType.RGBA;
   const filter = opts.filter ?? FilterMethod.Paeth;
+
+  // for chunked IDATs you will want the first scanline's filter
+  // to be one that doesn't reference the above chunks
+  const firstFilter = opts.firstFilter ?? filter;
+
   const channels = colorTypeToChannels(colorType);
   if (depth !== 8 && depth !== 16) {
     throw new Error(`Unsupported bit depth ${depth}`);
@@ -229,6 +250,7 @@ export function encode_IDAT_raw(data, opts = {}) {
       "Expected scanline count to be less than total image height"
     );
   }
+
   if (filter < 0x00 || filter > 0x04) {
     throw new Error(`filter type ${filter} unsupported`);
   }
@@ -253,7 +275,7 @@ export function encode_IDAT_raw(data, opts = {}) {
 
       // Shift the second half of the buffer toward the front
       // The first half will be the 'above scanline' (initially 0)
-      packed.copyWithin(0, bytesPerScanline);
+      if (i > 0) packed.copyWithin(0, bytesPerScanline);
 
       // now do the big packing into big endian format for this scanline
       // making sure to place it in the second half of the buffer
@@ -267,19 +289,20 @@ export function encode_IDAT_raw(data, opts = {}) {
 
       // Note: the source here is the latter half of the temp 2-scanline array
       const srcIdxInBytes = bytesPerScanline;
+      const scanlineFilter = i === 0 ? firstFilter : filter;
 
-      if (filter == FilterMethod.None) {
+      if (scanlineFilter == FilterMethod.None) {
         // fast mode, we can just copy the big endian bytes over to the output
         // being sure to only copy the second half of the buffer (current scanline)
         // and placing it after the filter (which doesn't need to be set, default 0x00)
         out.set(packed.subarray(bytesPerScanline), dstIdxInBytesPlusOne);
       } else {
-        out[dstIdxInBytes] = filter;
+        out[dstIdxInBytes] = scanlineFilter;
         applyFilter(
           out,
           packed,
           i,
-          filter,
+          scanlineFilter,
           bytesPerPixel,
           bytesPerScanline,
           srcIdxInBytes,
@@ -294,7 +317,8 @@ export function encode_IDAT_raw(data, opts = {}) {
       const dstIdxInBytes = i * (bytesPerScanline + 1);
       const dstIdxInBytesPlusOne = dstIdxInBytes + 1;
       const srcIdxInBytes = i * bytesPerScanline;
-      if (filter == FilterMethod.None) {
+      const scanlineFilter = i === 0 ? firstFilter : filter;
+      if (scanlineFilter == FilterMethod.None) {
         // Copy each scanline over but with a 1 byte offset
         // place after 1 byte offset to account for 0x00 filter (does not need to be set, buffer defaults to 0)
         out.set(
@@ -302,12 +326,12 @@ export function encode_IDAT_raw(data, opts = {}) {
           dstIdxInBytesPlusOne
         );
       } else {
-        out[dstIdxInBytes] = filter;
+        out[dstIdxInBytes] = scanlineFilter;
         applyFilter(
           out,
           data,
           i,
-          filter,
+          scanlineFilter,
           bytesPerPixel,
           bytesPerScanline,
           srcIdxInBytes,

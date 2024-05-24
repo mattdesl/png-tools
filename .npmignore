@@ -4,3 +4,8 @@ node_modules
 .DS_Store
 .npmignore
 LICENSE.md
+
+profiles/
+test/
+tmp/
+dist/

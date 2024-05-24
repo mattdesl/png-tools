@@ -76,13 +76,17 @@ export function applyFilter(
   srcIdxInBytes,
   dstIdxInBytesPlusOne
 ) {
-  if (filter == FilterMethod.Sub) {
+  if (filter === FilterMethod.None) {
+    for (let j = 0; j < bytesPerScanline; j++) {
+      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
+    }
+  } else if (filter === FilterMethod.Sub) {
     for (let j = 0; j < bytesPerScanline; j++) {
       const leftPixel =
         j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
       out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - leftPixel;
     }
-  } else if (filter == FilterMethod.Up) {
+  } else if (filter === FilterMethod.Up) {
     for (let j = 0; j < bytesPerScanline; j++) {
       const upPixel = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
       out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - upPixel;
@@ -95,7 +99,7 @@ export function applyFilter(
       const avg = (left + up) >> 1;
       out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - avg;
     }
-  } else if (filter == FilterMethod.Paeth) {
+  } else if (filter === FilterMethod.Paeth) {
     for (let j = 0; j < bytesPerScanline; j++) {
       const left =
         j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
@@ -129,6 +133,11 @@ function paethPredictor(left, above, upLeft) {
   if (pLeft <= pAbove && pLeft <= pUpLeft) return left;
   if (pAbove <= pUpLeft) return above;
   return upLeft;
+}
+
+export function colorTypeToString(colorType) {
+  const entries = Object.entries(ColorType);
+  return entries.find((e) => e[1] === colorType)[0];
 }
 
 export function colorTypeToChannels(colorType) {

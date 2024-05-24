@@ -1,21 +1,12 @@
-import {
-  ColorType,
-  FilterMethod,
-  colorTypeToChannels,
-  encode,
-} from "../index.js";
-import { deflate } from "pako";
-import fs from "node:fs/promises";
-import { dirname } from "node:path";
+import { ColorType, colorTypeToChannels, encode } from "../index.js";
+import { dirname } from "https://deno.land/std/path/mod.ts";
+import { deflate } from "npm:pako";
 
-const output = process.argv[2];
+const output = Deno.args[0];
 if (!output)
   throw new Error(
-    "Must specify an output, example:\n  node encode-image.js myfile.png"
+    "Must specify an output, example:\n  deno run -A deno-encode.js myfile.png"
   );
-
-// Encode faster but generates bigger files
-const IS_FAST_MODE = true;
 
 const width = 4096;
 const height = 4096;
@@ -53,17 +44,10 @@ const buf = encode(
     data,
     colorType,
     depth,
-    // speed things up a little by using no filtering,
-    // at the cost of filesize
-    filter: IS_FAST_MODE ? FilterMethod.None : FilterMethod.Paeth,
   },
-  deflate,
-  { level: IS_FAST_MODE ? 3 : 6 }
+  deflate
 );
 console.timeEnd("encode");
 
-// mkdirp and write file
-try {
-  await fs.mkdir(dirname(output), { recursive: true });
-} catch (err) {}
-await fs.writeFile(output, buf);
+await Deno.mkdir(dirname(output), { recursive: true });
+await Deno.writeFile(output, buf);

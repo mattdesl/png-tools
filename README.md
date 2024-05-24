@@ -41,6 +41,8 @@ const buf = encode(image, deflate);
 // => Uint8Array
 ```
 
+See [examples/encode-image.js](./examples/encode-image.js) for a full example.
+
 ### More Encoding Options
 
 You can encode RGB or RGBA, and 8 or 16 bits, with a different filter method that is applied to all scanlines. You can also specify a list of `ancillary` chunks which are inserted prior to image data (IDAT) chunks.
@@ -81,9 +83,11 @@ buf2 = encode(image, deflate, {
 });
 ```
 
+See [examples/encode-ancillary.js](./examples/encode-ancillary.js) for a full example.
+
 ### Reading PNG Metadata
 
-You can read the `IHDR` tag (metadata) without having to decode the entire PNG file.
+You can read the `IHDR` tag (metadata) without having to decode the entire PNG file. This entire header + metadata chunk should be exactly 33 bytes in a well formed PNG file.
 
 ```js
 import { readIHDR } from "png-tools";
@@ -92,6 +96,8 @@ import fs from "node:fs/promises";
 const buf = await fs.readFile("image.png");
 const { width, height, colorType, depth } = readIHDR(buf);
 ```
+
+See [examples/read-ihdr.js](./examples/read-ihdr.js) for a full example, that also only reads the first 33 bytes of the file rather than buffering it entirely into memory.
 
 ### Modifying PNG Chunks
 
@@ -181,7 +187,7 @@ writeChunk({
 writeChunk({ type: ChunkType.IEND });
 ```
 
-Using `pako.Deflator`, you can even send each individual chunk of deflated data as separate `IDAT` chunks.
+See [examples/encode-stream.js](./examples/encode-stream.js) for a more complete example, using `pako.Deflate` and streaming the compressed data directly into a file.
 
 ### Reading ICC Color Profile Data
 
@@ -195,7 +201,7 @@ import fs from "node:fs/promises";
 
 const buf = await fs.readFile("image.png");
 const chunks = decodeChunks(buf);
-const chunk = chunks.find(chunkTypeFilter(ChunkType.iCCP));
+const chunk = chunks.find(chunkFilter(ChunkType.iCCP));
 if (chunk) {
   const { name, data } = decode_iCCP(chunk.data);
   console.log("Embedded Profile:", name);
@@ -284,6 +290,10 @@ import { deflate } from "pako";
 
 buf = encode(myImage, deflate, { level: 3 });
 ```
+
+### Reduce the Bits
+
+Writing less bits will be faster, so 8 bit image will be much faster than 16, and `ColorType.RGB` will be faster than `ColorType.RGBA`, if you do not need an alpha channel.
 
 ### Filter Methods
 

@@ -1,6 +1,10 @@
 import crc32 from "./src/crc32.js";
 
-import { flattenBuffers, colorTypeToChannels } from "./src/util.js";
+import {
+  flattenBuffers,
+  colorTypeToChannels,
+  colorTypeToString,
+} from "./src/util.js";
 
 import { ChunkType, ColorType, FilterMethod, Intent } from "./src/constants.js";
 
@@ -26,6 +30,8 @@ import {
   decode_iCCP,
   decode_iTXt,
   decode_IHDR,
+  decode_pHYs,
+  decode_pHYs_PPI,
   chunkFilter,
   chunkNameToType,
   chunkTypeToName,
@@ -38,6 +44,7 @@ export {
   crc32,
   flattenBuffers,
   colorTypeToChannels,
+  colorTypeToString,
 
   // Export constants
   ChunkType,
@@ -69,6 +76,8 @@ export {
   decode_iCCP,
   decode_iTXt,
   decode_IHDR,
+  decode_pHYs,
+  decode_pHYs_PPI,
   chunkFilter,
   chunkNameToType,
   chunkTypeToName,

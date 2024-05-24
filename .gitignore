@@ -7,3 +7,6 @@ profiles/
 test/fixtures/icc
 test/fixtures/
 !test/fixtures/png/*.png
+
+tmp/
+dist/

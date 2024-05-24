@@ -11,16 +11,23 @@
   },
   "devDependencies": {
     "buffer": "^6.0.3",
+    "canvas-dimensions": "^1.0.0",
     "canvas-sketch": "^0.7.7",
+    "cli-progress": "^3.12.0",
+    "convert-length": "^1.0.1",
     "esbuild": "^0.21.3",
+    "fast-png": "^6.2.0",
     "icc": "^3.0.0",
+    "lcms-wasm": "^1.0.2",
     "pako": "^2.1.0",
     "pretty-bytes": "^6.1.1",
     "tape": "^5.7.5",
     "vite": "^5.2.11"
   },
   "scripts": {
-    "test": "node test/test.js"
+    "test": "node test/test.js",
+    "demo": "vite examples/",
+    "demo:build": "vite build examples/"
   },
   "keywords": [
     "png",
@@ -48,14 +55,5 @@
   "homepage": "https://github.com/mattdesl/png-tools",
   "bugs": {
     "url": "https://github.com/mattdesl/png-tools/issues"
-  },
-  "dependencies": {
-    "brittle": "^3.5.2",
-    "canvas-dimensions": "^1.0.0",
-    "convert-length": "^1.0.1",
-    "fast-png": "^6.2.0",
-    "fflate": "^0.8.2",
-    "jscolorengine": "^1.0.4",
-    "lcms-wasm": "^1.0.2"
   }
 }
