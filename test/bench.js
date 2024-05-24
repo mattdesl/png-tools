@@ -12,7 +12,7 @@ const image = createImage({
   width: 4096 * 2,
   height: 4096 * 2,
   depth: 8,
-  filter: FilterMethod.Paeth,
+  filter: FilterMethod.Up,
 });
 
 // encode an image

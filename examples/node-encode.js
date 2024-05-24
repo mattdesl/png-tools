@@ -11,7 +11,7 @@ import { dirname } from "node:path";
 const output = process.argv[2];
 if (!output)
   throw new Error(
-    "Must specify an output, example:\n  node encode-image.js myfile.png"
+    "Must specify an output, example:\n  node node-encode.js myfile.png"
   );
 
 // Encode faster but generates bigger files

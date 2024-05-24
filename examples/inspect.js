@@ -3,7 +3,6 @@ import {
   colorTypeToChannels,
   colorTypeToString,
   decodeChunks,
-  readIHDR,
   decode_iCCP,
   chunkFilter,
   ChunkType,

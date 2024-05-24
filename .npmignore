@@ -6,6 +6,7 @@ node_modules
 LICENSE.md
 
 profiles/
+examples/
 test/
 tmp/
 dist/

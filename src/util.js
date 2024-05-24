@@ -76,9 +76,17 @@ export function applyFilter(
   srcIdxInBytes,
   dstIdxInBytesPlusOne
 ) {
-  if (filter === FilterMethod.None) {
+  if (filter === FilterMethod.Paeth) {
     for (let j = 0; j < bytesPerScanline; j++) {
-      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
+      const left =
+        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
+      const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
+      const upLeft =
+        i === 0 || j < bytesPerPixel
+          ? 0
+          : data[srcIdxInBytes + j - bytesPerScanline - bytesPerPixel];
+      out[dstIdxInBytesPlusOne + j] =
+        data[srcIdxInBytes + j] - paethPredictor(left, up, upLeft);
     }
   } else if (filter === FilterMethod.Sub) {
     for (let j = 0; j < bytesPerScanline; j++) {
@@ -99,31 +107,16 @@ export function applyFilter(
       const avg = (left + up) >> 1;
       out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - avg;
     }
-  } else if (filter === FilterMethod.Paeth) {
-    for (let j = 0; j < bytesPerScanline; j++) {
-      const left =
-        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
-      const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
-      const upLeft =
-        i === 0 || j < bytesPerPixel
-          ? 0
-          : data[srcIdxInBytes + j - bytesPerScanline - bytesPerPixel];
-      out[dstIdxInBytesPlusOne + j] =
-        data[srcIdxInBytes + j] - paethPredictor(left, up, upLeft);
-    }
   }
-}
 
-// not needed
-// export function* splitPixels(data, width, height, channels, splitCount) {
-//   const chunkHeight = Math.floor(height / splitCount);
-//   const chunkSize = chunkHeight * width * channels;
-//   for (let i = 0; i < splitCount; i++) {
-//     const start = i * chunkSize;
-//     const end = i === splitCount - 1 ? data.length : start + chunkSize;
-//     yield data.subarray(start, end);
-//   }
-// }
+  // Should never get here in this version as applyFilter is only called
+  // when a non-None filter is specified
+  // if (filter === FilterMethod.None) {
+  //   for (let j = 0; j < bytesPerScanline; j++) {
+  //     out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
+  //   }
+  // }
+}
 
 function paethPredictor(left, above, upLeft) {
   let paeth = left + above - upLeft;

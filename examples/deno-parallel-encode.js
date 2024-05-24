@@ -1,4 +1,4 @@
-// TODO:
+// Reference:
 // https://github.com/DavidBuchanan314/parallel-png-proposal
 
 import {
@@ -12,9 +12,8 @@ import {
   colorTypeToString,
   flattenBuffers,
 } from "../index.js";
-// import ProgressBar from "https://deno.land/x/progress@v1.4.9/mod.ts";
+import { splitPixels } from "./util/pixels.js";
 import { MultiProgressBar } from "https://deno.land/x/progress@v1.4.9/mod.ts";
-
 import { adler32_combine } from "./util/adler32.js";
 
 const output = Deno.args[0];
@@ -169,7 +168,7 @@ async function processWorkers(
       pageCount
     )) {
       const worker = new Worker(
-        new URL("./util/parallel-encoder.js", import.meta.url),
+        new URL("./util/encode.worker.js", import.meta.url),
         {
           type: "module",
         }
@@ -213,21 +212,4 @@ async function processWorkers(
       worker.addEventListener("message", handler);
     }
   });
-}
-
-function* splitPixels(data, width, height, channels, splitCount) {
-  const chunkHeight = Math.floor(height / splitCount);
-  const chunkSize = chunkHeight * width * channels;
-  for (let i = 0; i < splitCount; i++) {
-    const start = i * chunkSize;
-    const end = i === splitCount - 1 ? data.length : start + chunkSize;
-    yield {
-      index: i,
-      start,
-      end,
-      view: data.subarray(start, end),
-      isFirst: i === 0,
-      isLast: i === splitCount - 1,
-    };
-  }
 }

@@ -3,10 +3,11 @@ node_modules
 *.log
 .DS_Store
 
-profiles/
+/profiles/
 test/fixtures/icc
 test/fixtures/
 !test/fixtures/png/*.png
 
-tmp/
-dist/
+/tmp/
+/dist/
+/examples/dist/

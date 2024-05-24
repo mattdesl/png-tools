@@ -13,6 +13,7 @@ import { Deflate } from "pako";
 import fs from "node:fs";
 import { dirname } from "node:path";
 import { SingleBar } from "cli-progress";
+import { splitPixels } from "./util/pixels.js";
 
 const output = process.argv[2];
 if (!output)
@@ -25,7 +26,8 @@ const height = 16000;
 const colorType = ColorType.RGB;
 const depth = 16;
 const channels = colorTypeToChannels(colorType);
-const filter = FilterMethod.Up;
+const filter = FilterMethod.None;
+const deflateOptions = { level: 3 };
 
 const ArrType = depth === 16 ? Uint16Array : Uint8ClampedArray;
 const maxValue = depth === 16 ? 0xffff : 0xff;
@@ -100,12 +102,15 @@ writeChunk({
 // ... write any ancillary chunks ...
 
 // create and write IDAT chunk
-const deflator = new Deflate({ level: 3 });
+const deflator = new Deflate(deflateOptions);
 
 // Number of pages worth of data to process at a time
 // Note: you can simplify this code by just doing a single
 // page and deflator.push(idat, true)
-const pageCount = 5;
+// The main benefits of splitting it up into pages:
+// 1. less in memory at one time (for really huge images)
+// 2. user isn't waiting a long time upfront
+const pageCount = 4;
 
 // current page and its total size
 let page = 0;
@@ -126,7 +131,7 @@ deflator.onData = function (chunk) {
 };
 
 // split whole stream into smaller sections
-for (let { view, last } of splitPixels(
+for (let { view, isLast } of splitPixels(
   data,
   width,
   height,
@@ -141,7 +146,7 @@ for (let { view, last } of splitPixels(
     firstFilter: FilterMethod.Sub,
   });
   totalSize = idat.byteLength;
-  deflator.push(idat, last);
+  deflator.push(idat, isLast);
   page++;
 }
 
@@ -158,16 +163,3 @@ progressBar.stop();
 // end stream
 stream.end();
 console.timeEnd("encode");
-
-export function* splitPixels(data, width, height, channels, splitCount) {
-  const chunkHeight = Math.floor(height / splitCount);
-  const chunkSize = chunkHeight * width * channels;
-  for (let i = 0; i < splitCount; i++) {
-    const start = i * chunkSize;
-    const end = i === splitCount - 1 ? data.length : start + chunkSize;
-    yield {
-      view: data.subarray(start, end),
-      last: i === splitCount - 1,
-    };
-  }
-}
