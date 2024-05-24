@@ -1,6 +1,6 @@
 # png-tools
 
-A suite of low level tools for working with PNG files in JavaScript. This is not a fully featured encoder or decoder, but a set of utilities that allow for some specific use cases around performance, print resolution, color profile embedding, streaming, and other tasks.
+A suite of low level tools for working with PNG files in JavaScript. This is not (yet) a fully featured encoder or decoder, but a set of utilities that allow for some specific use cases around performance, print resolution, color profile embedding, streaming, and other tasks.
 
 Some features:
 
