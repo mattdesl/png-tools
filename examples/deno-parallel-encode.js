@@ -12,7 +12,9 @@ import {
   colorTypeToString,
   flattenBuffers,
 } from "../index.js";
-import ProgressBar from "https://deno.land/x/progress@v1.4.9/mod.ts";
+// import ProgressBar from "https://deno.land/x/progress@v1.4.9/mod.ts";
+import { MultiProgressBar } from "https://deno.land/x/progress@v1.4.9/mod.ts";
+
 import { adler32_combine } from "./util/adler32.js";
 
 const output = Deno.args[0];
@@ -27,7 +29,8 @@ const colorType = ColorType.RGB;
 const depth = 16;
 const channels = colorTypeToChannels(colorType);
 const filter = FilterMethod.Up;
-const pageCount = 1;
+const pageCount = 16;
+console.log("Workers:", pageCount);
 
 const ArrType = depth === 16 ? Uint16Array : Uint8ClampedArray;
 const maxValue = depth === 16 ? 0xffff : 0xff;
@@ -70,7 +73,7 @@ console.log(`Depth: %s bpp`, depth);
 console.log(`Color Type: %s`, colorTypeToString(colorType));
 
 // show progress
-const progressBar = new ProgressBar({ title: "encoding", total: 100 });
+const progressBar = new MultiProgressBar({ title: "encoding" });
 
 const file = await Deno.open(output, {
   create: true,
@@ -97,7 +100,7 @@ await writeChunk({
 });
 
 // number of pages i.e. number of threads that will be run
-await progressBar.render(0);
+// await progressBar.render(Array(pageCount));
 
 const deflateOptions = { level: 3 };
 
@@ -106,7 +109,13 @@ const results = await processWorkers(
   options,
   pageCount,
   deflateOptions,
-  (p) => progressBar.render(p * 100)
+  (progresses) =>
+    progressBar.render(
+      progresses.map((p) => ({
+        completed: p * 100,
+        total: 100,
+      }))
+    )
 );
 
 let adler;
@@ -131,6 +140,7 @@ for (let i = 0; i < results.length; i++) {
 await writeChunk({ type: ChunkType.IEND });
 
 // stop progress
+await progressBar.render(results.map((p) => ({ completed: 100, total: 100 })));
 await progressBar.end();
 
 // // end stream
@@ -182,13 +192,17 @@ async function processWorkers(
       );
       const handler = async (ev) => {
         const r = ev.data;
+        workerResults[r.index] = r;
         if (r.result) {
-          workerResults[r.index] = r;
           worker.removeEventListener("message", handler);
           worker.terminate();
           remaining--;
           // TODO: Use MultiProgressBar to indicate the progress of each
-          await progress((pageCount - remaining) / pageCount);
+          const progresses = workerResults.map((r) => {
+            return r ? r.progress || 0 : 0;
+            // (pageCount - remaining) / pageCount
+          });
+          await progress(progresses);
           if (remaining === 0) {
             resolve(workerResults);
           } else if (remaining < 0) {

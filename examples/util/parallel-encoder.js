@@ -44,7 +44,7 @@ self.onmessage = (msg) => {
   deflate.onData = function (zChunk) {
     zChunks.push(zChunk);
     const progress = (totalSize - this.strm.avail_in) / totalSize;
-    self.postMessage({ progress });
+    self.postMessage({ progress, index });
   };
   deflate.push(idat, false);
   if (isLast) deflate.push([], constants.Z_FINISH);
@@ -60,5 +60,11 @@ self.onmessage = (msg) => {
   let result = flattenBuffers(zChunks);
   const adler = adler32(idat);
 
-  self.postMessage({ index, result, adler, size: idat.byteLength });
+  self.postMessage({
+    index,
+    result,
+    progress: 1,
+    adler,
+    size: idat.byteLength,
+  });
 };

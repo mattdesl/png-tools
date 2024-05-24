@@ -20,12 +20,12 @@ if (!output)
     "Must specify an output, example:\n  node encode-stream.js myfile.png"
   );
 
-const width = 8000;
-const height = 8000;
+const width = 16000;
+const height = 16000;
 const colorType = ColorType.RGB;
-const depth = 8;
+const depth = 16;
 const channels = colorTypeToChannels(colorType);
-const filter = FilterMethod.None;
+const filter = FilterMethod.Up;
 
 const ArrType = depth === 16 ? Uint16Array : Uint8ClampedArray;
 const maxValue = depth === 16 ? 0xffff : 0xff;
@@ -33,7 +33,7 @@ const maxValue = depth === 16 ? 0xffff : 0xff;
 const data = new ArrType(width * height * channels);
 
 // quickly generate some image data
-const tileSize = 32;
+const tileSize = Math.floor(width * 0.1);
 for (let y = 0; y < tileSize; y++) {
   for (let x = 0; x < width; x++) {
     for (let c = 0; c < channels; c++) {
@@ -86,6 +86,8 @@ function writeChunk(chunk) {
   stream.write(encodeChunk(chunk));
 }
 
+console.time("encode");
+
 // encode PNG header
 stream.write(encodeHeader());
 
@@ -98,7 +100,7 @@ writeChunk({
 // ... write any ancillary chunks ...
 
 // create and write IDAT chunk
-const deflator = new Deflate({ level: 6 });
+const deflator = new Deflate({ level: 3 });
 
 // Number of pages worth of data to process at a time
 // Note: you can simplify this code by just doing a single
@@ -155,6 +157,7 @@ progressBar.stop();
 
 // end stream
 stream.end();
+console.timeEnd("encode");
 
 export function* splitPixels(data, width, height, channels, splitCount) {
   const chunkHeight = Math.floor(height / splitCount);
