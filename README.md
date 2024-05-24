@@ -4,7 +4,7 @@ A suite of low level tools for working with print-quality PNG files in JavaScrip
 
 Some features:
 
-- Plain ES modules (tree-shakeable)
+- Plain JS ES modules, zero dependencies, tree-shakeable
 - Compatible with web, node, deno, bun, bare
 - Highly optimised; sometimes 2-6 times faster than [fast-png](https://www.npmjs.com/package/fast-png)
 - Supports parallel (multithreaded) encoding
