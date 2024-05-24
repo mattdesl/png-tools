@@ -1,3 +1,5 @@
+import { encode } from "../index.js";
+
 const render = ({ context, width, height }) => {
   const grad = context.createLinearGradient(width * 0.1, 0, width * 0.9, 0);
   grad.addColorStop(0, "color(display-p3 0 1 0)");
