@@ -18,8 +18,8 @@ import { canvasToBuffer, downloadBlob } from "../util/save.js";
 import prettyBytes from "pretty-bytes";
 
 const params = {
-  dimensions: "A0",
-  pixelsPerInch: 150,
+  dimensions: "A4",
+  pixelsPerInch: 300,
   units: "cm",
   depth: 16,
   colorType: ColorType.RGBA,
