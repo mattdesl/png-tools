@@ -1,4 +1,32 @@
-import { ColorType, FilterMethod } from "./constants.js";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: src/util.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: src/util.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { ColorType, FilterMethod } from "./constants.js";
 
 /**
  * Concatenates a given array of array-like data (array buffers, typed arrays) into a single Uint8Array.
@@ -13,7 +41,7 @@ export function flattenBuffers(chunks) {
   }
 
   const result = new Uint8Array(totalSize);
-  for (let i = 0, pos = 0; i < chunks.length; i++) {
+  for (let i = 0, pos = 0; i &lt; chunks.length; i++) {
     let chunk = chunks[i];
     result.set(chunk, pos);
     pos += chunk.length;
@@ -28,7 +56,7 @@ export function decodeNULTerminatedString(
 ) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   let str = "";
-  for (let i = 0; offset < data.length && i < maxLength; offset++, i++) {
+  for (let i = 0; offset &lt; data.length &amp;&amp; i &lt; maxLength; offset++, i++) {
     const b = dv.getUint8(offset);
     if (b === 0x00) {
       break;
@@ -66,7 +94,7 @@ export function mergeData(...arrays) {
 
 export function convertStringToBytes(val) {
   const data = new Uint8Array(val.length);
-  for (let i = 0; i < data.length; i++) {
+  for (let i = 0; i &lt; data.length; i++) {
     data[i] = val.charCodeAt(i);
   }
   return data;
@@ -83,32 +111,32 @@ export function applyFilter(
   dstIdxInBytesPlusOne
 ) {
   if (filter === FilterMethod.Paeth) {
-    for (let j = 0; j < bytesPerScanline; j++) {
+    for (let j = 0; j &lt; bytesPerScanline; j++) {
       const left =
-        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
+        j &lt; bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
       const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
       const upLeft =
-        i === 0 || j < bytesPerPixel
+        i === 0 || j &lt; bytesPerPixel
           ? 0
           : data[srcIdxInBytes + j - bytesPerScanline - bytesPerPixel];
       out[dstIdxInBytesPlusOne + j] =
         data[srcIdxInBytes + j] - paethPredictor(left, up, upLeft);
     }
   } else if (filter === FilterMethod.Sub) {
-    for (let j = 0; j < bytesPerScanline; j++) {
+    for (let j = 0; j &lt; bytesPerScanline; j++) {
       const leftPixel =
-        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
+        j &lt; bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
       out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - leftPixel;
     }
   } else if (filter === FilterMethod.Up) {
-    for (let j = 0; j < bytesPerScanline; j++) {
+    for (let j = 0; j &lt; bytesPerScanline; j++) {
       const upPixel = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
       out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - upPixel;
     }
   } else if (filter === FilterMethod.Average) {
-    for (let j = 0; j < bytesPerScanline; j++) {
+    for (let j = 0; j &lt; bytesPerScanline; j++) {
       const left =
-        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
+        j &lt; bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
       const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
       const avg = (left + up) >> 1;
       out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - avg;
@@ -118,7 +146,7 @@ export function applyFilter(
   // Should never get here in this version as applyFilter is only called
   // when a non-None filter is specified
   // if (filter === FilterMethod.None) {
-  //   for (let j = 0; j < bytesPerScanline; j++) {
+  //   for (let j = 0; j &lt; bytesPerScanline; j++) {
   //     out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
   //   }
   // }
@@ -129,8 +157,8 @@ function paethPredictor(left, above, upLeft) {
   let pLeft = Math.abs(paeth - left);
   let pAbove = Math.abs(paeth - above);
   let pUpLeft = Math.abs(paeth - upLeft);
-  if (pLeft <= pAbove && pLeft <= pUpLeft) return left;
-  if (pAbove <= pUpLeft) return above;
+  if (pLeft &lt;= pAbove &amp;&amp; pLeft &lt;= pUpLeft) return left;
+  if (pAbove &lt;= pUpLeft) return above;
   return upLeft;
 }
 
@@ -162,3 +190,26 @@ export function colorTypeToChannels(colorType) {
       throw new Error(`Invalid colorType ${colorType}`);
   }
 }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#withoutChunks">withoutChunks</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 10:13:55 GMT+0100 (British Summer Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -2,9 +2,22 @@ import crc32 from "./crc32.js";
 import { ChunkType, PNG_HEADER } from "./constants.js";
 import { chunkTypeToName, decode_IHDR } from "./chunks.js";
 
+/**
+ * @typedef {Object} PNGReaderOptions
+ * @property {boolean} [checkCRC=false] whether to check and verify CRC values of each chunk (slower but can detect errors and corruption earlier during parsing)
+ * @property {boolean} [copy=true] whether to return a sliced copy of each chunk data instead of a shallow subarray view into the input buffer
+ **/
+
+/**
+ * Reads a PNG buffer up to the end of the IHDR chunk and returns this metadata, giving its width, height, bit depth, and color type.
+ *
+ * @param {ArrayBufferView} buf the PNG buffer to read
+ * @param {PNGReaderOptions} [opts={}] optional parameters for reading
+ * @returns {IHDRData}
+ **/
 export function readIHDR(buf, opts = {}) {
   let meta = {};
-  pngChunkReader(buf, opts, (type, view) => {
+  reader(buf, { ...opts, copy: false }, (type, view) => {
     if (type === ChunkType.IHDR) {
       meta = decode_IHDR(view);
       return false; // stop reading the rest of PNG
@@ -13,15 +26,33 @@ export function readIHDR(buf, opts = {}) {
   return meta;
 }
 
-export function decodeChunks(buf, opts = {}) {
+/**
+ * Parses a PNG buffer and returns an array of chunks, each containing a type code and its data.
+ * The individual chunks are not decoded, but left as raw Uint8Array data. If `copy` option is `false`,
+ * the chunk data is a view into the original ArrayBufferView (no copy involved), which is more memory efficient
+ * for large files.
+ *
+ * @param {ArrayBufferView} buf
+ * @param {PNGReaderOptions} [opts={}] optional parameters for reading PNG chunks
+ * @returns {Chunk[]} an array of chunks
+ */
+export function readChunks(buf, opts = {}) {
   const chunks = [];
-  pngChunkReader(buf, opts, (type, data) =>
-    chunks.push({ type: chunkTypeToName(type), data: data.slice() })
-  );
+  reader(buf, opts, (type, data) => chunks.push({ type, data }));
   return chunks;
 }
 
-export function pngChunkReader(buf, opts = {}, read = () => {}) {
+/**
+ * A low-level interface for stream reading a PNG file. With the speicifed buffer, this function reads
+ * each chunk and calls the `read(type, data)` function, which is expected to do something with the chunk data.
+ * If the `read()` function returns `false`, the stream will stop reading the rest of the PNG file and safely end early,
+ * otherwise it will expect to end on an IEND type chunk to form a valid PNG file.
+ *
+ * @param {ArrayBufferView} buf
+ * @param {PNGReaderOptions} [opts={}] optional parameters for reading PNG chunks
+ * @returns {Chunk[]} an array of chunks
+ */
+export function reader(buf, opts = {}, read = () => {}) {
   if (!ArrayBuffer.isView(buf)) {
     throw new Error("Expected a typed array such as Uint8Array");
   }
@@ -38,7 +69,7 @@ export function pngChunkReader(buf, opts = {}, read = () => {}) {
     throw new Error(`Buffer too small to contain PNG header`);
   }
 
-  const { checkCRC = false } = opts;
+  const { checkCRC = false, copy = true } = opts;
 
   for (let i = 0; i < PNG_HEADER.length; i++) {
     if (data[i] !== PNG_HEADER[i]) throw new Error(`Invalid PNG file header`);
@@ -81,7 +112,9 @@ export function pngChunkReader(buf, opts = {}, read = () => {}) {
     // parse the current chunk
     const v = read(
       type,
-      data.subarray(chunkDataIdx, chunkDataIdx + chunkLength)
+      copy
+        ? data.slice(chunkDataIdx, chunkDataIdx + chunkLength)
+        : data.subarray(chunkDataIdx, chunkDataIdx + chunkLength)
     );
     if (v === false || type === ChunkType.IEND) {
       // safely end the stream

@@ -1,3 +1,9 @@
+/**
+ * @project png-tools
+ * @author Matt DesLauriers (@mattdesl)
+ * @license MIT see LICENSE.md file in GitHub repository
+ */
+
 import crc32 from "./src/crc32.js";
 
 import {
@@ -12,10 +18,10 @@ import {
   encode,
   encodeHeader,
   encodeChunk,
-  encodeChunks,
+  writeChunks,
 } from "./src/encode.js";
 
-import { decodeChunks, readIHDR, pngChunkReader } from "./src/decode.js";
+import { readChunks, readIHDR, reader } from "./src/decode.js";
 
 import {
   encode_IDAT_raw,
@@ -32,11 +38,8 @@ import {
   decode_IHDR,
   decode_pHYs,
   decode_pHYs_PPI,
-  chunkFilter,
   chunkNameToType,
   chunkTypeToName,
-  withoutChunks,
-  matchesChunkType,
 } from "./src/chunks.js";
 
 export {
@@ -56,12 +59,12 @@ export {
   encode,
   encodeHeader,
   encodeChunk,
-  encodeChunks,
+  writeChunks,
 
   // Decoding
-  decodeChunks,
+  readChunks,
   readIHDR,
-  pngChunkReader,
+  reader,
 
   // Chunk utils
   encode_IDAT_raw,
@@ -78,9 +81,6 @@ export {
   decode_IHDR,
   decode_pHYs,
   decode_pHYs_PPI,
-  chunkFilter,
   chunkNameToType,
   chunkTypeToName,
-  withoutChunks,
-  matchesChunkType,
 };

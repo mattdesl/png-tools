@@ -7,8 +7,8 @@ import {
   ColorType,
   FilterMethod,
   ChunkType,
-  encodeChunks,
-  decodeChunks,
+  writeChunks,
+  readChunks,
   withoutChunks,
 } from "../../src/png-io.js";
 import {
@@ -161,16 +161,16 @@ async function encodeCanvas(data) {
   let buffer = await canvasToBuffer(canvas);
   // if we have additional metadata, we can re-encode without having to re-compress
   if (pixelsPerInch) {
-    let chunks = decodeChunks(buffer);
+    let chunks = readChunks(buffer);
     // strip out an existing pHYs chunk if it exists
-    chunks = withoutChunks(chunks, ChunkType.pHYs);
+    chunks = chunks.filter((c) => c.type !== ChunkType.pHYs);
     // include the new chunk
     chunks.splice(1, 0, {
       type: ChunkType.pHYs,
       data: encode_pHYs_PPI(pixelsPerInch),
     });
     // re-encode the chunks (does not re-compress the data stream)
-    buffer = encodeChunks(chunks);
+    buffer = writeChunks(chunks);
   }
   return buffer;
 }

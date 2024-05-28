@@ -2,9 +2,8 @@ import { inflate } from "pako";
 import {
   colorTypeToChannels,
   colorTypeToString,
-  decodeChunks,
+  readChunks,
   decode_iCCP,
-  chunkFilter,
   ChunkType,
   decode_pHYs_PPI,
   decode_IHDR,
@@ -23,7 +22,7 @@ if (!input)
 const icc = process.argv[3];
 
 const buf = await fs.readFile(input);
-const chunks = decodeChunks(buf);
+const chunks = readChunks(buf, { copy: false });
 
 const { width, height, colorType, depth } = decode_IHDR(
   chunks.find(chunkFilter(ChunkType.IHDR)).data
@@ -70,4 +69,8 @@ for (let type of texts) {
     const txt = decode_iTXt(data);
     console.log(txt);
   }
+}
+
+function chunkFilter(type) {
+  return (chunk) => chunk.type === type;
 }

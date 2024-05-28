@@ -5,8 +5,6 @@ import {
   encode,
 } from "../index.js";
 import { deflate } from "pako";
-import fs from "node:fs/promises";
-import { dirname } from "node:path";
 
 const image = createImage({
   width: 4096 * 2,
@@ -17,7 +15,7 @@ const image = createImage({
 
 // encode an image
 console.time("encode");
-const buf = encode(image, deflate, { level: 3 });
+encode(image, deflate, { level: 3 });
 console.timeEnd("encode");
 
 function createImage(opts = {}) {

@@ -119,23 +119,19 @@ See [examples/read-ihdr.js](./examples/read-ihdr.js) for a full example, that al
 If you already have a PNG file, for example from `Canvas.toBlob()`, you can remove/insert chunks without having to re-filter and re-encode the pixel data. This is generally _much_ faster than decoding and re-encoding the entire image data, and you also won't need to include a DEFLATE algorithm in your program.
 
 ```js
-import {
-  decodeChunks,
-  encodeChunks,
-  ChunkType,
-  encode_pHYs_PPI,
-} from "png-tools";
+import { readChunks, writeChunks, ChunkType, encode_pHYs_PPI } from "png-tools";
 
 import { canvasToBuffer } from "./util/save.js";
 
 // use canvas.toBlob to get a PNG-encoded Uint8Array
 let buffer = await canvasToBuffer(canvas);
 
-// decode buffer into chunks
-let chunks = decodeChunks(buffer);
+// get chunks from buffer
+// we can optionally specify { copy: false } to return *views* into the buffer, i.e. more memory efficient
+let chunks = readChunks(buffer, { copy: false });
 
 // strip out an existing pHYs chunk if it exists
-chunks = chunks.filter((c) => !matchesChunkType(c.type, ChunkType.pHYs));
+chunks = chunks.filter((c) => c.type !== ChunkType.pHYs);
 
 // include the new chunk
 chunks.splice(1, 0, {
@@ -144,7 +140,7 @@ chunks.splice(1, 0, {
 });
 
 // your final buffer
-buffer = encodeChunks(chunks);
+buffer = writeChunks(chunks);
 ```
 
 ### Streaming Encoding
@@ -212,14 +208,14 @@ A more advanced example can be seen in [./examples/deno-parallel-encode.js](./ex
 You can also use this library to inspect and extract the color profile chunk (iCCP), if one exists.
 
 ```js
-import { decodeChunks, chunkFilter, ChunkType, decode_iCCP } from "png-tools";
+import { readChunks, ChunkType, decode_iCCP } from "png-tools";
 import { inflate } from "pako";
 import { parse as parseICC } from "icc";
 import fs from "node:fs/promises";
 
 const buf = await fs.readFile("image.png");
-const chunks = decodeChunks(buf);
-const chunk = chunks.find(chunkFilter(ChunkType.iCCP));
+const chunks = readChunks(buf);
+const chunk = chunks.find((c) => c.type === ChunkType.iCCP);
 if (chunk) {
   const { name, data } = decode_iCCP(chunk.data);
   console.log("Embedded Profile:", name);
@@ -277,22 +273,23 @@ For faster encoding, you can do a few things:
 If you are working in the browser with 8-bit color data, you can use HTML5 Canvas2D's native PNG encoder which is highly optimised. This will give you a PNG buffer, which you can then extend with additional chunks (such as resolution and color profile) without having to re-filter and re-compress the pixel data, which is the most expensive step.
 
 ```js
-import { createCanvas, canvasToBuffer } from "png-tools/canvas.js";
+import { readChunks, writeChunks } from "png-tools";
+import { canvasToBuffer } from "./util/save.js";
 
-// If you have a canvas already, you should skip this step
-// But if you only have pixel data, you can convert it like so:
-const canvas = createCanvas(data);
+const canvas = document.createElement("canvas");
+// ... draw your canvas ...
 
-// encode as PNG, letting the browser do the hard work
+// use canvas.toBlob or similar to get a Uint8Array PNG encoded buffer
 let buffer = await canvasToBuffer(canvas);
 
 // now we can extract the chunks
-let chunks = decodeChunks(buffer);
+// we can optionally specify { copy: false } to return *views* into the buffer, i.e. more memory efficient
+let chunks = readChunks(buffer, { copy: false });
 
 // ... do something with the chunks
 
 // and re-encode the chunks (does not re-compress the data stream)
-buffer = encodeChunks(chunks);
+buffer = writeChunks(chunks);
 ```
 
 ### Workers (encoding off the UI thread)

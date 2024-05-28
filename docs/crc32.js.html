@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: crc32.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: crc32.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// Fast CRC32 in JavaScript
+// 101arrowz (https://github.com/101arrowz)
+// License: MIT
+
+// Modified from 101arrowz's gist:
+// https://gist.github.com/101arrowz/e58695f7ccfdf74f60ba22018093edea
+
+// This code uses the Slice-by-16 algorithm to achieve performance
+// roughly 2x greater than all other JS CRC32 implementations (e.g.
+// crc32-js).
+
+// Per local testing, Slice-by-16 outperforms Slice-by-4 by around 50%
+// and Slice-by-8/Slice-by-32/Slice-by-64 by 10-30%
+
+// This CRC implementation can compete with WASM CRC implementations
+// as well, and it tends to perform between 30% faster and 10% slower
+// than WASM CRC32 (>1MB input chunks is faster on WASM).
+
+// CRC32 table
+// perf: signed integers are 2x more likely to be Smi
+// Smi is a V8 datatype in (-2**30, 2**30-1)
+// Smi operations are much faster
+
+function CRC32() {
+  const crct = new Int32Array(4096);
+  for (let i = 0; i &lt; 256; ++i) {
+    let c = i,
+      k = 9;
+    while (--k) c = (c &amp; 1 &amp;&amp; -306674912) ^ (c >>> 1);
+    crct[i] = c;
+  }
+  for (let i = 0; i &lt; 256; ++i) {
+    let lv = crct[i];
+    for (let j = 256; j &lt; 4096; j += 256)
+      lv = crct[i | j] = (lv >>> 8) ^ crct[lv &amp; 255];
+  }
+
+  const crcts = [];
+  for (let i = 0; i &lt; 16; ) {
+    crcts[i] = crct.subarray(i &lt;&lt; 8, ++i &lt;&lt; 8);
+  }
+
+  // prettier-ignore
+  const [t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16] =
+    crcts;
+
+  // raw CRC function
+  // stream by passing in previous CRC output as second parameter
+  return function crc32(d, c = -1) {
+    let i = 0;
+    const len = d.length;
+    const max = len - 16;
+    for (; i &lt; max; ) {
+      c =
+        t16[d[i++] ^ (c &amp; 255)] ^
+        t15[d[i++] ^ ((c >> 8) &amp; 255)] ^
+        t14[d[i++] ^ ((c >> 16) &amp; 255)] ^
+        t13[d[i++] ^ (c >>> 24)] ^
+        t12[d[i++]] ^
+        t11[d[i++]] ^
+        t10[d[i++]] ^
+        t9[d[i++]] ^
+        t8[d[i++]] ^
+        t7[d[i++]] ^
+        t6[d[i++]] ^
+        t5[d[i++]] ^
+        t4[d[i++]] ^
+        t3[d[i++]] ^
+        t2[d[i++]] ^
+        t1[d[i++]];
+    }
+    for (; i &lt; len; ++i) {
+      c = t1[(c &amp; 255) ^ d[i]] ^ (c >>> 8);
+    }
+    return ~c;
+  };
+}
+
+/**
+ * Calculate the CRC32 checksum of an array-like buffer.
+
+ * @function crc32
+ * @param {ArrayLike} buf the array-like buffer to calculate the CRC32 of
+ * @param {number} [c=-1] the initial CRC32 value
+ * @returns {number} the CRC32 checksum
+ */
+export default (() => {
+  // Avoid allocating global memory unless necessary
+  let init = false;
+  let crc32_instance;
+  return function crc32(d, c = -1) {
+    if (!init) {
+      crc32_instance = CRC32();
+      init = true;
+    }
+    return crc32_instance(d, c);
+  };
+})();
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decodeChunks">decodeChunks</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#decode_iCCP">decode_iCCP</a></li><li><a href="global.html#decode_iTXt">decode_iTXt</a></li><li><a href="global.html#decode_pHYs">decode_pHYs</a></li><li><a href="global.html#decode_pHYs_PPI">decode_pHYs_PPI</a></li><li><a href="global.html#encode">encode</a></li><li><a href="global.html#encodeChunk">encodeChunk</a></li><li><a href="global.html#encodeChunks">encodeChunks</a></li><li><a href="global.html#encodeHeader">encodeHeader</a></li><li><a href="global.html#encode_IDAT_raw">encode_IDAT_raw</a></li><li><a href="global.html#encode_IHDR">encode_IHDR</a></li><li><a href="global.html#encode_iCCP">encode_iCCP</a></li><li><a href="global.html#encode_iTXt">encode_iTXt</a></li><li><a href="global.html#encode_pHYs">encode_pHYs</a></li><li><a href="global.html#encode_pHYs_PPI">encode_pHYs_PPI</a></li><li><a href="global.html#encode_sRGB">encode_sRGB</a></li><li><a href="global.html#encode_standardChromatics">encode_standardChromatics</a></li><li><a href="global.html#encode_standardGamma">encode_standardGamma</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#matchesChunkType">matchesChunkType</a></li><li><a href="global.html#pngChunkReader">pngChunkReader</a></li><li><a href="global.html#readIHDR">readIHDR</a></li><li><a href="global.html#withoutChunks">withoutChunks</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 10:51:59 GMT+0100 (British Summer Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

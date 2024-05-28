@@ -20,12 +20,12 @@ import {
   encode,
   encodeHeader,
   encodeChunk,
-  encodeChunks,
+  writeChunks,
 
   // Decoding
-  decodeChunks,
+  readChunks,
   readIHDR,
-  pngChunkReader,
+  reader,
 
   // Chunk utils
   encode_IDAT_raw,
@@ -40,11 +40,8 @@ import {
   decode_iCCP,
   decode_iTXt,
   decode_IHDR,
-  chunkFilter,
   chunkNameToType,
   chunkTypeToName,
-  withoutChunks,
-  matchesChunkType,
 } from "../index.js";
 
 test("crc32", async (t) => {
@@ -129,12 +126,8 @@ test("encoder matches", async (t) => {
       deflate,
       { level: 3 }
     );
-    const c0 = decodeChunks(enc0).find((f) =>
-      matchesChunkType(f.type, ChunkType.IDAT)
-    );
-    const c1 = decodeChunks(enc1).find((f) =>
-      matchesChunkType(f.type, ChunkType.IDAT)
-    );
+    const c0 = readChunks(enc0).find((f) => f.type === ChunkType.IDAT);
+    const c1 = readChunks(enc1).find((f) => f.type === ChunkType.IDAT);
 
     const eq = Buffer.from(inflate(c0.data)).equals(
       Buffer.from(inflate(c1.data))
@@ -161,7 +154,7 @@ test("test png encoder filtering", async (t) => {
 
 test("comparison png decoder works", async (t) => {
   for (let i = 0; i < pngs.length; i++) {
-    const buf = await fs.readFile(`test/fixtures/png/generated-${i}.png`);
+    const buf = await fs.readFile(`test/encoded/generated-${i}.png`);
     const data = FastPNG.decode(buf);
     t.deepEqual(data, { ...pngs[i], text: {} });
   }
@@ -169,22 +162,15 @@ test("comparison png decoder works", async (t) => {
 
 test("our png decoder works", async (t) => {
   for (let i = 0; i < pngs.length; i++) {
-    const buf = await fs.readFile(`test/fixtures/png/generated-${i}.png`);
-    const chunks = decodeChunks(buf);
-    const data = encodeChunks(chunks);
+    const buf = await fs.readFile(`test/encoded/generated-${i}.png`);
+    const chunks = readChunks(buf);
+    const data = writeChunks(chunks);
     t.ok(Buffer.from(buf).equals(Buffer.from(data)), "buffers equal");
-
-    chunks[0].type = chunkNameToType("IHDR");
-    const data2 = encodeChunks(chunks);
-    t.ok(
-      Buffer.from(buf).equals(Buffer.from(data2)),
-      "accepts uint32 decimal types instead of string names"
-    );
   }
 
   for (let i = 0; i < pngs.length; i++) {
     const png = pngs[i];
-    const buf = await fs.readFile(`test/fixtures/png/generated-${i}.png`);
+    const buf = await fs.readFile(`test/encoded/generated-${i}.png`);
     const meta = readIHDR(buf);
     t.equals(meta.width, png.width);
     t.equals(meta.height, png.height);
@@ -192,7 +178,7 @@ test("our png decoder works", async (t) => {
     t.equals(meta.colorType, png.channels === 3 ? 2 : 6);
   }
 
-  const inputBuf = await fs.readFile(`test/fixtures/png/generated-0.png`);
+  const inputBuf = await fs.readFile(`test/encoded/generated-0.png`);
   const inputLargerBuf = new Uint8Array(inputBuf.length + 8);
   inputLargerBuf.set(inputBuf, 4);
   const subBuf = inputLargerBuf.subarray(4, 4 + inputBuf.length);
@@ -211,12 +197,8 @@ test("our png decoder works", async (t) => {
   );
 
   t.equals(0x49484452, ChunkType.IHDR);
-  t.ok(matchesChunkType(0x49484452, ChunkType.IHDR));
-  t.ok(matchesChunkType(0x49484452, 0x49484452));
-  t.ok(matchesChunkType(0x49484452, "IHDR"));
-  t.ok(matchesChunkType("IHDR", "IHDR"));
-  t.ok(matchesChunkType("IHDR", 0x49484452));
-  t.ok(!matchesChunkType("IDHR", 0x49484452));
+  t.equals(chunkNameToType("IHDR"), ChunkType.IHDR);
+  t.equals(chunkTypeToName(ChunkType.IHDR), "IHDR");
 });
 
 test("encode and decode fields", async (t) => {

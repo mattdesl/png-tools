@@ -1,6 +1,35 @@
-import crc32 from "./crc32.js";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: encode.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: encode.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import crc32 from "./crc32.js";
 import { ChunkType, ColorType, PNG_HEADER } from "./constants.js";
 import { encode_IHDR, encode_IDAT_raw } from "./chunks.js";
+import { chunkNameToType } from "./chunks.js";
 
 /**
  * @typedef {Object} EncodeOptions
@@ -26,12 +55,12 @@ export function encode(options = {}, deflate, deflateOptions) {
   const { data, ancillary = [], colorType = ColorType.RGBA } = options;
   if (!data) throw new Error(`must specify { data }`);
   if (!deflate) throw new Error(`must specify a deflate function`);
-  if (colorType !== ColorType.RGB && colorType !== ColorType.RGBA) {
+  if (colorType !== ColorType.RGB &amp;&amp; colorType !== ColorType.RGBA) {
     throw new Error(
       "only RGB or RGBA colorType encoding is currently supported"
     );
   }
-  return writeChunks([
+  return encodeChunks([
     { type: ChunkType.IHDR, data: encode_IHDR(options) },
     ...ancillary,
     {
@@ -61,17 +90,17 @@ export function encodeChunk(chunk) {
   const dv = new DataView(output.buffer, output.byteOffset, output.byteLength);
   // Write chunk length
   let idx = 0;
-  encodeChunkRaw(output, dv, chunk, idx);
+  writeChunk(output, dv, chunk, idx);
   return output;
 }
 
 /**
- * Writes and formats an array of PNG chunks into a complete PNG buffer, including the PNG header.
+ * Encodes an array of PNG chunks into a complete PNG buffer, including the PNG header.
  *
  * @param {Chunk[]} chunks the array of chunks to encode
  * @returns {Uint8Array} the encoded PNG buffer
  */
-export function writeChunks(chunks) {
+export function encodeChunks(chunks) {
   let totalSize = PNG_HEADER.length; // start with header
   let idx = totalSize;
   for (let chunk of chunks) {
@@ -86,13 +115,13 @@ export function writeChunks(chunks) {
   output.set(PNG_HEADER, 0);
 
   for (let chunk of chunks) {
-    idx = encodeChunkRaw(output, dv, chunk, idx);
+    idx = writeChunk(output, dv, chunk, idx);
   }
 
   return output;
 }
 
-function encodeChunkRaw(output, dv, chunk, idx = 0) {
+function writeChunk(output, dv, chunk, idx = 0) {
   // Write chunk length
   const length = chunk.data ? chunk.data.length : 0;
   dv.setUint32(idx, length);
@@ -104,7 +133,8 @@ function encodeChunkRaw(output, dv, chunk, idx = 0) {
   const chunkDataEndIdx = chunkDataStartIdx + length;
 
   // Write chunk type code
-  const type = chunk.type;
+  const type =
+    typeof chunk.type === "string" ? chunkNameToType(chunk.type) : chunk.type;
   dv.setUint32(chunkStartIdx, type);
 
   // Write chunk data
@@ -120,3 +150,26 @@ function encodeChunkRaw(output, dv, chunk, idx = 0) {
   // return next index for reading
   return chunkDataEndIdx + 4;
 }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decodeChunks">decodeChunks</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#decode_iCCP">decode_iCCP</a></li><li><a href="global.html#decode_iTXt">decode_iTXt</a></li><li><a href="global.html#decode_pHYs">decode_pHYs</a></li><li><a href="global.html#decode_pHYs_PPI">decode_pHYs_PPI</a></li><li><a href="global.html#encode">encode</a></li><li><a href="global.html#encodeChunk">encodeChunk</a></li><li><a href="global.html#encodeChunks">encodeChunks</a></li><li><a href="global.html#encodeHeader">encodeHeader</a></li><li><a href="global.html#encode_IDAT_raw">encode_IDAT_raw</a></li><li><a href="global.html#encode_IHDR">encode_IHDR</a></li><li><a href="global.html#encode_iCCP">encode_iCCP</a></li><li><a href="global.html#encode_iTXt">encode_iTXt</a></li><li><a href="global.html#encode_pHYs">encode_pHYs</a></li><li><a href="global.html#encode_pHYs_PPI">encode_pHYs_PPI</a></li><li><a href="global.html#encode_sRGB">encode_sRGB</a></li><li><a href="global.html#encode_standardChromatics">encode_standardChromatics</a></li><li><a href="global.html#encode_standardGamma">encode_standardGamma</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#matchesChunkType">matchesChunkType</a></li><li><a href="global.html#pngChunkReader">pngChunkReader</a></li><li><a href="global.html#readIHDR">readIHDR</a></li><li><a href="global.html#withoutChunks">withoutChunks</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 10:51:59 GMT+0100 (British Summer Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

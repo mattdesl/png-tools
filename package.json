@@ -1,7 +1,7 @@
 {
   "name": "png-tools",
   "version": "1.0.0",
-  "description": "print quality PNG re-encoder",
+  "description": "low-level PNG codec tools",
   "main": "./index.js",
   "license": "MIT",
   "type": "module",
@@ -13,9 +13,12 @@
     "buffer": "^6.0.3",
     "canvas-dimensions": "^1.0.0",
     "canvas-sketch": "^0.7.7",
+    "clean-documentation-theme": "^0.5.2",
     "cli-progress": "^3.12.0",
     "convert-length": "^1.0.1",
     "esbuild": "^0.21.3",
+    "esdoc2": "^2.1.5",
+    "esdoc2-standard-plugin": "^2.1.2",
     "fast-png": "^6.2.0",
     "icc": "^3.0.0",
     "jsdoc-to-markdown": "^8.0.1",
@@ -29,7 +32,8 @@
     "test": "node test/test.js",
     "test:build": "node test/generate-png-fixtures.js",
     "demo": "vite examples/",
-    "demo:build": "vite build examples/"
+    "demo:build": "vite build examples/",
+    "docs": "jsdoc -c .jsdoc.json -d docs -R DOC.md"
   },
   "keywords": [
     "png",
@@ -57,5 +61,8 @@
   "homepage": "https://github.com/mattdesl/png-tools",
   "bugs": {
     "url": "https://github.com/mattdesl/png-tools/issues"
+  },
+  "dependencies": {
+    "esdoc2-ecmascript-proposal-plugin": "^2.1.1"
   }
 }

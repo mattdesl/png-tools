@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: decode.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: decode.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import crc32 from "./crc32.js";
+import { ChunkType, PNG_HEADER } from "./constants.js";
+import { chunkTypeToName, decode_IHDR } from "./chunks.js";
+
+/**
+ * @typedef {Object} PNGChunkReaderOptions
+ * @property {boolean} [checkCRC=false] whether to check and verify CRC values of each chunk (slower but can detect errors and corruption earlier during parsing)
+ **/
+
+/**
+ * Reads a PNG buffer up to the end of the IHDR chunk and returns this metadata, giving its width, height, bit depth, and color type.
+ *
+ * @param {ArrayBufferView} buf the PNG buffer to read
+ * @param {PNGChunkReaderOptions} [opts={}] optional parameters for reading
+ * @returns {IHDRData}
+ **/
+export function readIHDR(buf, opts = {}) {
+  let meta = {};
+  pngChunkReader(buf, opts, (type, view) => {
+    if (type === ChunkType.IHDR) {
+      meta = decode_IHDR(view);
+      return false; // stop reading the rest of PNG
+    }
+  });
+  return meta;
+}
+
+/**
+ * Decodes a PNG buffer and returns an array of chunks, each containing a type code and its data.
+ * The individual chunks are not decoded, but left as raw Uint8Array data
+ *
+ * @param {ArrayBufferView} buf
+ * @param {PNGChunkReaderOptions} [opts={}] optional parameters for reading PNG chunks
+ * @returns {Chunk[]} an array of chunks
+ */
+export function decodeChunks(buf, opts = {}) {
+  const chunks = [];
+  pngChunkReader(buf, opts, (type, data) =>
+    chunks.push({ type: chunkTypeToName(type), data: data.slice() })
+  );
+  return chunks;
+}
+
+/**
+ * Decodes a PNG buffer and returns an array of chunks, each containing a type code and its data.
+ * @param {ArrayBufferView} buf
+ * @param {PNGChunkReaderOptions} [opts={}] optional parameters for reading PNG chunks
+ * @returns {Chunk[]} an array of chunks
+ */
+export function pngChunkReader(buf, opts = {}, read = () => {}) {
+  if (!ArrayBuffer.isView(buf)) {
+    throw new Error("Expected a typed array such as Uint8Array");
+  }
+
+  if (typeof opts === "function") {
+    read = opts;
+    opts = {};
+  }
+
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const data = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+
+  if (data.length &lt; PNG_HEADER.length) {
+    throw new Error(`Buffer too small to contain PNG header`);
+  }
+
+  const { checkCRC = false } = opts;
+
+  for (let i = 0; i &lt; PNG_HEADER.length; i++) {
+    if (data[i] !== PNG_HEADER[i]) throw new Error(`Invalid PNG file header`);
+  }
+
+  let ended = false;
+  let hasMetIHDR = false;
+  let idx = 8;
+  while (idx &lt; data.length) {
+    // Length of current chunk
+    const chunkLength = dv.getUint32(idx);
+    idx += 4;
+
+    // Extract 4-byte type code
+    const type = dv.getUint32(idx);
+
+    // First chunk must be IHDR
+    if (!hasMetIHDR) {
+      if (type !== ChunkType.IHDR) throw new Error("Invalid PNG: IHDR missing");
+      hasMetIHDR = true;
+    }
+
+    const chunkDataIdx = idx + 4;
+    if (checkCRC) {
+      // Get the chunk contents including the type code but not CRC code
+      const chunkBuffer = data.subarray(idx, chunkDataIdx + chunkLength);
+
+      // Int32 CRC value that comes after the chunk data
+      const crcCode = dv.getInt32(chunkDataIdx + chunkLength);
+      let crcExpect = crc32(chunkBuffer);
+      if (crcExpect !== crcCode) {
+        throw new Error(
+          `CRC value for ${chunkTypeToName(
+            type
+          )} does not match, PNG file may be corrupted`
+        );
+      }
+    }
+
+    // parse the current chunk
+    const v = read(
+      type,
+      data.subarray(chunkDataIdx, chunkDataIdx + chunkLength)
+    );
+    if (v === false || type === ChunkType.IEND) {
+      // safely end the stream
+      ended = true;
+      break;
+    }
+
+    // Skip past the chunk data and CRC value
+    idx = chunkDataIdx + chunkLength + 4;
+  }
+
+  if (!ended) {
+    throw new Error("PNG ended without IEND chunk");
+  }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decodeChunks">decodeChunks</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#decode_iCCP">decode_iCCP</a></li><li><a href="global.html#decode_iTXt">decode_iTXt</a></li><li><a href="global.html#decode_pHYs">decode_pHYs</a></li><li><a href="global.html#decode_pHYs_PPI">decode_pHYs_PPI</a></li><li><a href="global.html#encode">encode</a></li><li><a href="global.html#encodeChunk">encodeChunk</a></li><li><a href="global.html#encodeChunks">encodeChunks</a></li><li><a href="global.html#encodeHeader">encodeHeader</a></li><li><a href="global.html#encode_IDAT_raw">encode_IDAT_raw</a></li><li><a href="global.html#encode_IHDR">encode_IHDR</a></li><li><a href="global.html#encode_iCCP">encode_iCCP</a></li><li><a href="global.html#encode_iTXt">encode_iTXt</a></li><li><a href="global.html#encode_pHYs">encode_pHYs</a></li><li><a href="global.html#encode_pHYs_PPI">encode_pHYs_PPI</a></li><li><a href="global.html#encode_sRGB">encode_sRGB</a></li><li><a href="global.html#encode_standardChromatics">encode_standardChromatics</a></li><li><a href="global.html#encode_standardGamma">encode_standardGamma</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#matchesChunkType">matchesChunkType</a></li><li><a href="global.html#pngChunkReader">pngChunkReader</a></li><li><a href="global.html#readIHDR">readIHDR</a></li><li><a href="global.html#withoutChunks">withoutChunks</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 10:51:59 GMT+0100 (British Summer Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

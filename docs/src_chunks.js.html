@@ -1,4 +1,32 @@
-import { ColorType, FilterMethod } from "./constants.js";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: src/chunks.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: src/chunks.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { ColorType, FilterMethod } from "./constants.js";
 import {
   decodeNULTerminatedString,
   convertStringToBytes,
@@ -7,36 +35,27 @@ import {
   colorTypeToChannels,
 } from "./util.js";
 
-/**
- * @typedef Chunk
- * @property {number} type the chunk type code as a 4-byte Uint32 value (ASCII string)
- * @property {Uint8Array} data the chunk data (not including chunk length, type, or CRC checksum)
- **/
+export function matchesChunkType(a, b) {
+  if (a == null || b == null)
+    throw new Error(
+      `chunk type does not exist; maybe a spelling mistake in ChunkType enum?`
+    );
+  const aType = typeof a === "string" ? chunkNameToType(a) : a;
+  const bType = typeof b === "string" ? chunkNameToType(b) : b;
+  return aType === bType;
+}
 
-// /**
-//  *
-//  */
-// export function matchesChunkType(a, b) {
-//   if (a == null || b == null)
-//     throw new Error(
-//       `chunk type does not exist; maybe a spelling mistake in ChunkType enum?`
-//     );
-//   const aType = typeof a === "string" ? chunkNameToType(a) : a;
-//   const bType = typeof b === "string" ? chunkNameToType(b) : b;
-//   return aType === bType;
-// }
+export function chunkFilter(type) {
+  if (!type) throw new Error("Must specify a type parameter");
+  const types = Array.isArray(type) ? type : [type];
+  return (c) => types.some((n) => matchesChunkType(c.type, n));
+}
 
-// export function chunkFilter(type) {
-//   if (!type) throw new Error("Must specify a type parameter");
-//   const types = Array.isArray(type) ? type : [type];
-//   return (c) => types.some((n) => matchesChunkType(c.type, n));
-// }
-
-// /** @deprecated */
-// export function withoutChunks(chunks, type) {
-//   const filter = chunkFilter(type);
-//   return chunks.filter((c) => !filter(c));
-// }
+/** @deprecated */
+export function withoutChunks(chunks, type) {
+  const filter = chunkFilter(type);
+  return chunks.filter((c) => !filter(c));
+}
 
 /**
  * Converts an arbitrary 4-byte chunk type into a readable ASCII string.
@@ -46,10 +65,10 @@ import {
  */
 export function chunkTypeToName(type) {
   return String.fromCharCode(
-    (type >> 24) & 0xff,
-    (type >> 16) & 0xff,
-    (type >> 8) & 0xff,
-    type & 0xff
+    (type >> 24) &amp; 0xff,
+    (type >> 16) &amp; 0xff,
+    (type >> 8) &amp; 0xff,
+    type &amp; 0xff
   );
 }
 
@@ -64,9 +83,9 @@ export function chunkNameToType(name) {
     throw new Error("Chunk name must be exactly 4 characters");
   }
   return (
-    (name.charCodeAt(0) << 24) |
-    (name.charCodeAt(1) << 16) |
-    (name.charCodeAt(2) << 8) |
+    (name.charCodeAt(0) &lt;&lt; 24) |
+    (name.charCodeAt(1) &lt;&lt; 16) |
+    (name.charCodeAt(2) &lt;&lt; 8) |
     name.charCodeAt(3)
   );
 }
@@ -75,11 +94,6 @@ export function chunkNameToType(name) {
  * @typedef {Object} IHDRData
  * @property {number} width the width of the image in pixels
  * @property {number} height the height of the image in pixels
- * @property {number} depth the bit depth of the image
- * @property {ColorType} colorType the color type of the image
- * @property {number} compression the compression method of the image (always 0 in well-formed PNGs)
- * @property {number} filter the filter specification (always 0 in well-formed PNGs, note this is not the same as FilterMethod)
- * @property {number} interlace the interlace method of the image (0 for no interlace, 1 for Adam7 interlace)
  */
 
 /**
@@ -112,11 +126,6 @@ export function decode_IHDR(data) {
   };
 }
 
-/**
- * Encodes the IHDR metadata as a Uint8Array buffer. Depth defaults to 8, colorType defaults to ColorType.RGBA, and interlace defaults to 0.
- * @param {IHDRData} data the IHDR metadata
- * @returns {Uint8Array} the encoded IHDR data
- */
 export function encode_IHDR(data) {
   const buf = new Uint8Array(13);
   const dv = new DataView(buf.buffer);
@@ -133,24 +142,12 @@ export function encode_IHDR(data) {
   return buf;
 }
 
-/**
- * @typedef {Object} iCCPData
- * @property {string} name the name of the color profile
- * @property {number} compression the compression method used (always 0 for well-formed PNG, implying DEFLATE)
- * @property {Uint8Array} data the compressed color profile data
- */
-
-/**
- * Decodes iCCP (color profile) chunk data and returns an object.
- * @param {ArrayBufferView} data the chunk data, typically Uint8Array
- * @returns {iCCPData} the iCCP chunk metadata
- */
 export function decode_iCCP(data) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
   let [name, i] = decodeNULTerminatedString(data, 0, 79);
 
-  // compression mode & offset for data
+  // compression mode &amp; offset for data
   const compression = dv.getUint8(i++);
 
   return {
@@ -160,12 +157,6 @@ export function decode_iCCP(data) {
   };
 }
 
-/**
- * Encodes iCCP (color profile) metadata as a Uint8Array buffer. The data is expected to already be compressed by DEFLATE,
- * and the `compression` flag is ignored and set to 0 as it is the only valid value defined by the PNG spec.
- * @param {iCCPData} opts the iCCP metadata
- * @returns {Uint8Array} the encoded iCCP data
- */
 export function encode_iCCP({ name, data } = {}) {
   const nameBytes = convertStringToBytes(name).slice(0, 79);
   const buf = new Uint8Array(nameBytes.length + 2 + data.length);
@@ -174,21 +165,6 @@ export function encode_iCCP({ name, data } = {}) {
   return buf;
 }
 
-/**
- * @typedef {Object} iTXtData
- * @property {string} keyword the keyword for this text chunk
- * @property {number} compressionFlag the compression flag (0 for no compression, 1 for compression)
- * @property {number} compressionMethod the compression method (0 for zlib)
- * @property {string} languageTag the language tag
- * @property {string} translatedKeyword the translated keyword
- * @property {string} text the text data
- */
-
-/**
- * Decodes iTXt (international text) chunk data and returns an object.
- * @param {ArrayBufferView} data the chunk data, typically Uint8Array
- * @returns {iTXtData} the iTXt chunk metadata
- */
 export function decode_iTXt(data) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
@@ -207,7 +183,7 @@ export function decode_iTXt(data) {
   offset = idx2;
 
   let text = "";
-  for (; offset < data.length; offset++) {
+  for (; offset &lt; data.length; offset++) {
     const b = dv.getUint8(offset);
     const chr = String.fromCharCode(b);
     text += chr;
@@ -223,11 +199,6 @@ export function decode_iTXt(data) {
   };
 }
 
-/**
- * Encodes iTXt (international text) metadata as a Uint8Array buffer.
- * @param {iTXtData} opts the iTXt metadata
- * @returns {Uint8Array} the encoded iTXt data
- */
 export function encode_iTXt(opts = {}) {
   const {
     keyword = "",
@@ -252,10 +223,6 @@ export function encode_iTXt(opts = {}) {
   return result;
 }
 
-/**
- * Encodes a standard sRGB gamma chunk, useful as a default.
- * @returns {Uint8Array} the encoded sRGB gamma data
- */
 export function encode_standardGamma() {
   const data = new Uint8Array(4);
   const dv = new DataView(data.buffer);
@@ -263,41 +230,20 @@ export function encode_standardGamma() {
   return data;
 }
 
-/**
- * Encodes a standard chromatics chunk, useful as a default.
- * @returns {Uint8Array} the encoded chromatics data
- */
 export function encode_standardChromatics() {
   const data = new Uint8Array(8 * 4);
   const dv = new DataView(data.buffer);
   const items = [31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000];
-  for (let i = 0; i < items.length; i++) {
+  for (let i = 0; i &lt; items.length; i++) {
     dv.setUint32(i * 4, items[i]);
   }
   return data;
 }
 
-/**
- * Encodes an sRGB chunk with an intent value.
- * @param {Intent} intent the rendering intent
- * @returns {Uint8Array} the encoded sRGB data
- */
 export function encode_sRGB(byte) {
   return new Uint8Array([byte]);
 }
 
-/**
- * @typedef {Object} pHYsData
- * @property {number} x the number of pixels per unit in the x direction
- * @property {number} y the number of pixels per unit in the y direction
- * @property {number} unit the unit specifier (0 for unknown, 1 for meter)
- */
-
-/**
- * Encodes pHYs (physical pixel dimensions) metadata as a Uint8Array buffer.
- * @param {pHYsData} opts the pHYs metadata
- * @returns {Uint8Array} the encoded pHYs data
- */
 export function encode_pHYs({ x, y, unit = 1 } = {}) {
   const data = new Uint8Array(9);
   const dv = new DataView(data.buffer);
@@ -307,11 +253,6 @@ export function encode_pHYs({ x, y, unit = 1 } = {}) {
   return data;
 }
 
-/**
- * Decodes pHYs (physical pixel dimensions) chunk data and returns an object.
- * @param {ArrayBufferView} data the chunk data, typically Uint8Array
- * @returns {pHYsData} the pHYs chunk metadata
- */
 export function decode_pHYs(data) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   return {
@@ -321,13 +262,6 @@ export function decode_pHYs(data) {
   };
 }
 
-/**
- * Decodes the pHYs chunk data and returns the pixels per inch value. This expects the data's x and y to be equal and the unit to be meters.
- * Note that since the value is rounded during encoding, the resulting PPI might not be exactly the same as the original.
- *
- * @param {ArrayBufferView} data the chunk data, typically Uint8Array
- * @returns {number} the pixels per inch value, or null if the data is invalid
- */
 export function decode_pHYs_PPI(data) {
   const { x, y, unit } = decode_pHYs(data);
   if (x !== y) return null;
@@ -335,39 +269,12 @@ export function decode_pHYs_PPI(data) {
   return x * 0.0254;
 }
 
-/**
- * Encodes a pHYs chunk with a pixels per inch value, this is mostly a convenience function.
- * @param {number} pixelsPerInch the number of pixels per inch, such as 72 (web) or 300 (print) DPI
- * @returns {Uint8Array} the encoded pHYs data
- */
 export function encode_pHYs_PPI(pixelsPerInch) {
   // convert 1 m to px at N PPI
   const ppu = Math.round((1 / 0.0254) * pixelsPerInch);
   return encode_pHYs({ x: ppu, y: ppu, unit: 1 });
 }
 
-/**
- * @typedef IDATParameters
- * @property {number} width the width of the image in pixels
- * @property {number} height the height of the image in pixels
- * @property {number} [depth=8] the bit depth of the image (default 8)
- * @property {ColorType} [colorType=ColorType.RGBA] the color type of the image (default RGBA)
- * @property {FilterMethod} [filter=FilterMethod.Paeth] the filter method to use (default Paeth)
- * @property {FilterMethod} [firstFilter=filter] the filter method to use for the *first* scanline (defaults to provided `filter`)
- */
-
-/**
- * Encodes an image scanline (or sequence of scanlines) in the form of IDAT chunk data (a Uint8Array).
- * This will use the specified `filter` parameter, or default to Paeth, which is a good general-purpose filter. You can
- * set the filter to `FilterMethod.None`, which will be much more efficient but may compress poorly.
- *
- * Note that if you are using many chunks of IDAT data, such as for parallel encoding, you'll want to set the `firstFilter`
- * to either `FilterMethod.None` or `FilterMethod.Sub` (the others require the previous scanline to be available).
- *
- * @param {ArrayBufferView} data the raw image pixel data
- * @param {IDATParameters} opts the IDAT parameters
- * @returns {Uint8Array} the encoded IDAT data
- */
 export function encode_IDAT_raw(data, opts = {}) {
   const width = opts.width;
   const height = opts.height;
@@ -380,7 +287,7 @@ export function encode_IDAT_raw(data, opts = {}) {
   const firstFilter = opts.firstFilter ?? filter;
 
   const channels = colorTypeToChannels(colorType);
-  if (depth !== 8 && depth !== 16) {
+  if (depth !== 8 &amp;&amp; depth !== 16) {
     throw new Error(`Unsupported bit depth ${depth}`);
   }
 
@@ -398,7 +305,7 @@ export function encode_IDAT_raw(data, opts = {}) {
     );
   }
 
-  if (filter < 0x00 || filter > 0x04) {
+  if (filter &lt; 0x00 || filter > 0x04) {
     throw new Error(`filter type ${filter} unsupported`);
   }
 
@@ -417,7 +324,7 @@ export function encode_IDAT_raw(data, opts = {}) {
       packed.byteLength
     );
 
-    for (let i = 0; i < scanlineCount; i++) {
+    for (let i = 0; i &lt; scanlineCount; i++) {
       const srcIdxInElements = i * elementsPerScanline;
 
       // Shift the second half of the buffer toward the front
@@ -426,7 +333,7 @@ export function encode_IDAT_raw(data, opts = {}) {
 
       // now do the big packing into big endian format for this scanline
       // making sure to place it in the second half of the buffer
-      for (let j = 0; j < elementsPerScanline; j++) {
+      for (let j = 0; j &lt; elementsPerScanline; j++) {
         const v = data[srcIdxInElements + j];
         packedDV.setUint16(bytesPerScanline + j * 2, v);
       }
@@ -459,7 +366,7 @@ export function encode_IDAT_raw(data, opts = {}) {
     }
   } else {
     // 8 bit is simpler, we can just copy data
-    for (let i = 0; i < scanlineCount; i++) {
+    for (let i = 0; i &lt; scanlineCount; i++) {
       // scanline size + 1 byte for filter type
       const dstIdxInBytes = i * (bytesPerScanline + 1);
       const dstIdxInBytesPlusOne = dstIdxInBytes + 1;
@@ -490,3 +397,26 @@ export function encode_IDAT_raw(data, opts = {}) {
 
   return out;
 }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#withoutChunks">withoutChunks</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 10:13:55 GMT+0100 (British Summer Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
