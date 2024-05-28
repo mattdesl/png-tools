@@ -1,8 +1,6 @@
-/**!
- * Fast CRC32 in JavaScript
- * 101arrowz (https://github.com/101arrowz)
- * License: MIT
- */
+// Fast CRC32 in JavaScript
+// 101arrowz (https://github.com/101arrowz)
+// License: MIT
 
 // Modified from 101arrowz's gist:
 // https://gist.github.com/101arrowz/e58695f7ccfdf74f60ba22018093edea
@@ -78,6 +76,14 @@ function CRC32() {
   };
 }
 
+/**
+ * Calculate the CRC32 checksum of an array-like buffer.
+
+ * @function crc32
+ * @param {ArrayLike} buf the array-like buffer to calculate the CRC32 of
+ * @param {number} [c=-1] the initial CRC32 value
+ * @returns {number} the CRC32 checksum
+ */
 export default (() => {
   // Avoid allocating global memory unless necessary
   let init = false;

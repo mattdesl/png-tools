@@ -1,5 +1,11 @@
 import { ColorType, FilterMethod } from "./constants.js";
 
+/**
+ * Concatenates a given array of array-like data (array buffers, typed arrays) into a single Uint8Array.
+ *
+ * @param {ArrayLike[]} chunks
+ * @returns Uint8Array concatenated data
+ */
 export function flattenBuffers(chunks) {
   let totalSize = 0;
   for (let chunk of chunks) {

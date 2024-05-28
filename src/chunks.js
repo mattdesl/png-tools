@@ -7,6 +7,12 @@ import {
   colorTypeToChannels,
 } from "./util.js";
 
+/**
+ *
+ * @param {*} a
+ * @param {*} b
+ * @returns
+ */
 export function matchesChunkType(a, b) {
   if (a == null || b == null)
     throw new Error(
@@ -23,11 +29,18 @@ export function chunkFilter(type) {
   return (c) => types.some((n) => matchesChunkType(c.type, n));
 }
 
+/** @deprecated */
 export function withoutChunks(chunks, type) {
   const filter = chunkFilter(type);
   return chunks.filter((c) => !filter(c));
 }
 
+/**
+ * Converts an arbitrary 4-byte chunk type into a readable ASCII string.
+ *
+ * @param {number} type the chunk type
+ * @returns {string} a name representing this type
+ */
 export function chunkTypeToName(type) {
   return String.fromCharCode(
     (type >> 24) & 0xff,
@@ -37,6 +50,12 @@ export function chunkTypeToName(type) {
   );
 }
 
+/**
+ * Converts a 4-character ASCII string into a 4-byte (32-bit) integer representing a chunk type.
+ *
+ * @param {string} name the name of the chunk
+ * @returns {number} a 32-bit integer representing this chunk type
+ */
 export function chunkNameToType(name) {
   if (name.length !== 4) {
     throw new Error("Chunk name must be exactly 4 characters");
@@ -49,6 +68,19 @@ export function chunkNameToType(name) {
   );
 }
 
+/**
+ * @typedef {Object} IHDRData
+ * @property {number} width the width of the image in pixels
+ * @property {number} height the height of the image in pixels
+ */
+
+/**
+ * Decodes the IHDR chunk data, which gives information about the PNG image.
+ * The chunk data does not include the length or chunk type fields, nor the CRC32 checksum.
+ *
+ * @param {ArrayBufferView} data a typed array input, typically Uint8Array
+ * @return {IHDRData} the decoded IHDR data as a plain JS object
+ */
 export function decode_IHDR(data) {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   let off = 0;

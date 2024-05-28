@@ -19,21 +19,27 @@ Some things that are not yet supported:
 - Extracting and dealing with palettes for indexed PNGs
 - Supporting colorType encoding other than RGB and RGBA
 
+> 🔧 Note: this is a low-level library for maximum flexibility. A simpler API could be built on top of this framework that makes some more opinionated trade-offs.
+
+## Installation
+
+Currently only distributed through npm.
+
+```sh
+npm install png-tools --save
+```
+
 ## Docs
 
 TODO.
 
-## Unopinionated
-
-Note that these are low-level PNG codec tools that try not to make too many assumptions about exact usage. A more general-purpose PNG library could be built atop these tools that makes specific choices and trade-offs (like the choice of DEFLATE library or parallelization method).
-
 ## Recipes
 
-The [./examples/](./examples/) folder is full of different ways of working with the tools. Many of them can be run from the command line. There are other examples below.
+See the [./examples/](./examples/) folder for more.
 
 ### Encode Pixel Data
 
-For RGB and RGBA data, you can use the helper function. You are expected to 'bring your own DEFLATE', a good option is pako.
+Use `encode()` if you just want a simple way to create a PNG from pixel data. You are expected to 'bring your own DEFLATE', a good option is [pako](https://npmjs.com/package/pako).
 
 ```js
 import { encode } from "png-tools";
@@ -116,12 +122,11 @@ If you already have a PNG file, for example from `Canvas.toBlob()`, you can remo
 import {
   decodeChunks,
   encodeChunks,
-  withoutChunks,
   ChunkType,
   encode_pHYs_PPI,
 } from "png-tools";
 
-import { canvasToBuffer } from "./util/canvas.js";
+import { canvasToBuffer } from "./util/save.js";
 
 // use canvas.toBlob to get a PNG-encoded Uint8Array
 let buffer = await canvasToBuffer(canvas);
@@ -130,7 +135,7 @@ let buffer = await canvasToBuffer(canvas);
 let chunks = decodeChunks(buffer);
 
 // strip out an existing pHYs chunk if it exists
-chunks = withoutChunks(chunks, ChunkType.pHYs);
+chunks = chunks.filter((c) => !matchesChunkType(c.type, ChunkType.pHYs));
 
 // include the new chunk
 chunks.splice(1, 0, {
@@ -144,7 +149,7 @@ buffer = encodeChunks(chunks);
 
 ### Streaming Encoding
 
-You can manually build up a set of chunks, either to buffer into an array, or stream directly into a file. This can be combined with WebWorkers and File System API on the web for a very efficient and low-memory encoding system, with a good UX that includes progress reporting and cancellation.
+You can manually build up a set of chunks, either to buffer into an array, or stream directly into a file. This can be combined with WebWorkers and File System API on the web for a very efficient and low-memory encoding system. This also allows for progress reporting and cancellation.
 
 ```js
 import {
@@ -200,7 +205,7 @@ See [examples/encode-stream.js](./examples/encode-stream.js) for a more complete
 
 ### Parallel (Multithreaded) Encoding
 
-A more advanced example can be seen in [./examples/deno-parallel-encode.js]. This should also be possible to port to the web.
+A more advanced example can be seen in [./examples/deno-parallel-encode.js](./examples/deno-parallel-encode.js). This should also be possible to port to the web.
 
 ### Reading ICC Color Profile Data
 
@@ -327,6 +332,19 @@ buf = encode(
   },
   deflate
 );
+```
+
+## Running from Source
+
+Git clone, then:
+
+```sh
+cd png-tools
+npm install
+npm run test:build
+
+# now run tests
+npm run test
 ```
 
 ## License
