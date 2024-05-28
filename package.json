@@ -28,7 +28,7 @@
     "test": "node test/test.js",
     "test:build": "node test/generate-png-fixtures.js",
     "demo": "vite examples/",
-    "demo:build": "vite build ./examples/ --outDir ../docs/demo --base='/demo/' --emptyOutDir",
+    "demo:build": "vite build ./examples/ --outDir ../docs/demo --base='./' --emptyOutDir",
     "docs": "jsdoc -c .jsdoc.json -d docs -R DOC.md"
   },
   "keywords": [
