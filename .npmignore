@@ -5,8 +5,9 @@ node_modules
 .npmignore
 LICENSE.md
 
-profiles/
-examples/
-test/
-tmp/
-dist/
+/profiles/
+/examples/
+/test/
+/tmp/
+/docs/
+.jsdoc.json
