@@ -46,7 +46,7 @@ Full documentation [here](https://mattdesl.github.io/png-tools/).
 
 ## Demo
 
-A simple online demo is [here](https://mattdesl.github.io/png-tools), and the source [here](./examples/web/main.js). This only shows some features such as CPU, Web Workers, and FileSystem API encoding, but does not demonstrate more advanced features like parallel encoding or color profiles.
+A simple online demo is [here](https://mattdesl.github.io/png-tools/demo), and the source [here](./examples/web/main.js). This only shows some features such as CPU, Web Workers, and FileSystem API encoding, but does not demonstrate more advanced features like parallel encoding or color profiles.
 
 ## Recipes
 
