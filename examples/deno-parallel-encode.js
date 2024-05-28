@@ -25,7 +25,7 @@ if (!output)
 const width = 16000;
 const height = 16000;
 const colorType = ColorType.RGB;
-const depth = 16;
+const depth = 8;
 const channels = colorTypeToChannels(colorType);
 const filter = FilterMethod.Up;
 const pageCount = 16;
@@ -168,7 +168,7 @@ async function processWorkers(
       pageCount
     )) {
       const worker = new Worker(
-        new URL("./util/encode.worker.js", import.meta.url),
+        new URL("./util/parallel-encode-worker.js", import.meta.url),
         {
           type: "module",
         }
@@ -196,10 +196,8 @@ async function processWorkers(
           worker.removeEventListener("message", handler);
           worker.terminate();
           remaining--;
-          // TODO: Use MultiProgressBar to indicate the progress of each
           const progresses = workerResults.map((r) => {
             return r ? r.progress || 0 : 0;
-            // (pageCount - remaining) / pageCount
           });
           await progress(progresses);
           if (remaining === 0) {

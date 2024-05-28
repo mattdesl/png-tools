@@ -23,6 +23,15 @@ Some things that are not yet supported:
 
 > 🔧 Note: this is a low-level library for maximum flexibility. A simpler API could be built on top of this framework that makes some more opinionated trade-offs.
 
+## Contents
+
+- [Installation](#installation)
+- [Docs](#docs)
+- [Demo](#demo)
+- [Recipes](#recipes)
+- [Optimisations](#optimisations)
+- [Running from Source](#running-from-source)
+
 ## Installation
 
 Currently only distributed through npm.
@@ -34,6 +43,10 @@ npm install png-tools --save
 ## Docs
 
 Full documentation [here](https://mattdesl.github.io/png-tools/).
+
+## Demo
+
+A simple online demo is [here](https://mattdesl.github.io/png-tools), and the source [here](./examples/web/main.js). This only shows some features such as CPU, Web Workers, and FileSystem API encoding, but does not demonstrate more advanced features like parallel encoding or color profiles.
 
 ## Recipes
 

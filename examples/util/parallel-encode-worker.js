@@ -1,10 +1,4 @@
-import {
-  FilterMethod,
-  colorTypeToChannels,
-  encode_IDAT_raw,
-  encode_iCCP,
-  flattenBuffers,
-} from "../../index.js";
+import { FilterMethod, encode_IDAT_raw, flattenBuffers } from "../../index.js";
 import { Deflate, constants } from "pako";
 import { adler32 } from "./adler32.js";
 
