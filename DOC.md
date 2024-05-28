@@ -1,5 +1,11 @@
 `png-tools` is a suite of low level tools for working with PNG files in JavaScript.
 
+## Source Code
+
+The source code is on GitHub:
+
+[https://github.com/mattdesl/png-tools/](https://github.com/mattdesl/png-tools/)
+
 ## Docs
 
 The documentation is held here:
@@ -8,4 +14,4 @@ The documentation is held here:
 
 ## Usage
 
-For installation and usage, see the [README.md page](https://github.com/mattdesl/png-tools/tree/main) on the GitHub repository.
+For installation and usage, see the [README.md page](https://github.com/mattdesl/png-tools/) on the GitHub repository.

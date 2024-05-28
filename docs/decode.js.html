@@ -31,20 +31,21 @@ import { ChunkType, PNG_HEADER } from "./constants.js";
 import { chunkTypeToName, decode_IHDR } from "./chunks.js";
 
 /**
- * @typedef {Object} PNGChunkReaderOptions
+ * @typedef {Object} PNGReaderOptions
  * @property {boolean} [checkCRC=false] whether to check and verify CRC values of each chunk (slower but can detect errors and corruption earlier during parsing)
+ * @property {boolean} [copy=true] whether to return a sliced copy of each chunk data instead of a shallow subarray view into the input buffer
  **/
 
 /**
  * Reads a PNG buffer up to the end of the IHDR chunk and returns this metadata, giving its width, height, bit depth, and color type.
  *
  * @param {ArrayBufferView} buf the PNG buffer to read
- * @param {PNGChunkReaderOptions} [opts={}] optional parameters for reading
+ * @param {PNGReaderOptions} [opts={}] optional parameters for reading
  * @returns {IHDRData}
  **/
 export function readIHDR(buf, opts = {}) {
   let meta = {};
-  pngChunkReader(buf, opts, (type, view) => {
+  reader(buf, { ...opts, copy: false }, (type, view) => {
     if (type === ChunkType.IHDR) {
       meta = decode_IHDR(view);
       return false; // stop reading the rest of PNG
@@ -54,28 +55,32 @@ export function readIHDR(buf, opts = {}) {
 }
 
 /**
- * Decodes a PNG buffer and returns an array of chunks, each containing a type code and its data.
- * The individual chunks are not decoded, but left as raw Uint8Array data
+ * Parses a PNG buffer and returns an array of chunks, each containing a type code and its data.
+ * The individual chunks are not decoded, but left as raw Uint8Array data. If `copy` option is `false`,
+ * the chunk data is a view into the original ArrayBufferView (no copy involved), which is more memory efficient
+ * for large files.
  *
  * @param {ArrayBufferView} buf
- * @param {PNGChunkReaderOptions} [opts={}] optional parameters for reading PNG chunks
+ * @param {PNGReaderOptions} [opts={}] optional parameters for reading PNG chunks
  * @returns {Chunk[]} an array of chunks
  */
-export function decodeChunks(buf, opts = {}) {
+export function readChunks(buf, opts = {}) {
   const chunks = [];
-  pngChunkReader(buf, opts, (type, data) =>
-    chunks.push({ type: chunkTypeToName(type), data: data.slice() })
-  );
+  reader(buf, opts, (type, data) => chunks.push({ type, data }));
   return chunks;
 }
 
 /**
- * Decodes a PNG buffer and returns an array of chunks, each containing a type code and its data.
+ * A low-level interface for stream reading a PNG file. With the speicifed buffer, this function reads
+ * each chunk and calls the `read(type, data)` function, which is expected to do something with the chunk data.
+ * If the `read()` function returns `false`, the stream will stop reading the rest of the PNG file and safely end early,
+ * otherwise it will expect to end on an IEND type chunk to form a valid PNG file.
+ *
  * @param {ArrayBufferView} buf
- * @param {PNGChunkReaderOptions} [opts={}] optional parameters for reading PNG chunks
+ * @param {PNGReaderOptions} [opts={}] optional parameters for reading PNG chunks
  * @returns {Chunk[]} an array of chunks
  */
-export function pngChunkReader(buf, opts = {}, read = () => {}) {
+export function reader(buf, opts = {}, read = () => {}) {
   if (!ArrayBuffer.isView(buf)) {
     throw new Error("Expected a typed array such as Uint8Array");
   }
@@ -92,7 +97,7 @@ export function pngChunkReader(buf, opts = {}, read = () => {}) {
     throw new Error(`Buffer too small to contain PNG header`);
   }
 
-  const { checkCRC = false } = opts;
+  const { checkCRC = false, copy = true } = opts;
 
   for (let i = 0; i &lt; PNG_HEADER.length; i++) {
     if (data[i] !== PNG_HEADER[i]) throw new Error(`Invalid PNG file header`);
@@ -135,7 +140,9 @@ export function pngChunkReader(buf, opts = {}, read = () => {}) {
     // parse the current chunk
     const v = read(
       type,
-      data.subarray(chunkDataIdx, chunkDataIdx + chunkLength)
+      copy
+        ? data.slice(chunkDataIdx, chunkDataIdx + chunkLength)
+        : data.subarray(chunkDataIdx, chunkDataIdx + chunkLength)
     );
     if (v === false || type === ChunkType.IEND) {
       // safely end the stream
@@ -161,13 +168,13 @@ export function pngChunkReader(buf, opts = {}, read = () => {}) {
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decodeChunks">decodeChunks</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#decode_iCCP">decode_iCCP</a></li><li><a href="global.html#decode_iTXt">decode_iTXt</a></li><li><a href="global.html#decode_pHYs">decode_pHYs</a></li><li><a href="global.html#decode_pHYs_PPI">decode_pHYs_PPI</a></li><li><a href="global.html#encode">encode</a></li><li><a href="global.html#encodeChunk">encodeChunk</a></li><li><a href="global.html#encodeChunks">encodeChunks</a></li><li><a href="global.html#encodeHeader">encodeHeader</a></li><li><a href="global.html#encode_IDAT_raw">encode_IDAT_raw</a></li><li><a href="global.html#encode_IHDR">encode_IHDR</a></li><li><a href="global.html#encode_iCCP">encode_iCCP</a></li><li><a href="global.html#encode_iTXt">encode_iTXt</a></li><li><a href="global.html#encode_pHYs">encode_pHYs</a></li><li><a href="global.html#encode_pHYs_PPI">encode_pHYs_PPI</a></li><li><a href="global.html#encode_sRGB">encode_sRGB</a></li><li><a href="global.html#encode_standardChromatics">encode_standardChromatics</a></li><li><a href="global.html#encode_standardGamma">encode_standardGamma</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#matchesChunkType">matchesChunkType</a></li><li><a href="global.html#pngChunkReader">pngChunkReader</a></li><li><a href="global.html#readIHDR">readIHDR</a></li><li><a href="global.html#withoutChunks">withoutChunks</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#decode_iCCP">decode_iCCP</a></li><li><a href="global.html#decode_iTXt">decode_iTXt</a></li><li><a href="global.html#decode_pHYs">decode_pHYs</a></li><li><a href="global.html#decode_pHYs_PPI">decode_pHYs_PPI</a></li><li><a href="global.html#encode">encode</a></li><li><a href="global.html#encodeChunk">encodeChunk</a></li><li><a href="global.html#encodeHeader">encodeHeader</a></li><li><a href="global.html#encode_IDAT_raw">encode_IDAT_raw</a></li><li><a href="global.html#encode_IHDR">encode_IHDR</a></li><li><a href="global.html#encode_iCCP">encode_iCCP</a></li><li><a href="global.html#encode_iTXt">encode_iTXt</a></li><li><a href="global.html#encode_pHYs">encode_pHYs</a></li><li><a href="global.html#encode_pHYs_PPI">encode_pHYs_PPI</a></li><li><a href="global.html#encode_sRGB">encode_sRGB</a></li><li><a href="global.html#encode_standardChromatics">encode_standardChromatics</a></li><li><a href="global.html#encode_standardGamma">encode_standardGamma</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#readChunks">readChunks</a></li><li><a href="global.html#readIHDR">readIHDR</a></li><li><a href="global.html#reader">reader</a></li><li><a href="global.html#writeChunks">writeChunks</a></li></ul>
 </nav>
 
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 10:51:59 GMT+0100 (British Summer Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 11:36:11 GMT+0100 (British Summer Time)
 </footer>
 
 <script> prettyPrint(); </script>

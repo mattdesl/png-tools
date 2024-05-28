@@ -41,30 +41,30 @@ import {
  * @property {Uint8Array} data the chunk data (not including chunk length, type, or CRC checksum)
  **/
 
-/**
- *
- */
-export function matchesChunkType(a, b) {
-  if (a == null || b == null)
-    throw new Error(
-      `chunk type does not exist; maybe a spelling mistake in ChunkType enum?`
-    );
-  const aType = typeof a === "string" ? chunkNameToType(a) : a;
-  const bType = typeof b === "string" ? chunkNameToType(b) : b;
-  return aType === bType;
-}
+// /**
+//  *
+//  */
+// export function matchesChunkType(a, b) {
+//   if (a == null || b == null)
+//     throw new Error(
+//       `chunk type does not exist; maybe a spelling mistake in ChunkType enum?`
+//     );
+//   const aType = typeof a === "string" ? chunkNameToType(a) : a;
+//   const bType = typeof b === "string" ? chunkNameToType(b) : b;
+//   return aType === bType;
+// }
 
-export function chunkFilter(type) {
-  if (!type) throw new Error("Must specify a type parameter");
-  const types = Array.isArray(type) ? type : [type];
-  return (c) => types.some((n) => matchesChunkType(c.type, n));
-}
+// export function chunkFilter(type) {
+//   if (!type) throw new Error("Must specify a type parameter");
+//   const types = Array.isArray(type) ? type : [type];
+//   return (c) => types.some((n) => matchesChunkType(c.type, n));
+// }
 
-/** @deprecated */
-export function withoutChunks(chunks, type) {
-  const filter = chunkFilter(type);
-  return chunks.filter((c) => !filter(c));
-}
+// /** @deprecated */
+// export function withoutChunks(chunks, type) {
+//   const filter = chunkFilter(type);
+//   return chunks.filter((c) => !filter(c));
+// }
 
 /**
  * Converts an arbitrary 4-byte chunk type into a readable ASCII string.
@@ -528,13 +528,13 @@ export function encode_IDAT_raw(data, opts = {}) {
 </div>
 
 <nav>
-    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decodeChunks">decodeChunks</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#decode_iCCP">decode_iCCP</a></li><li><a href="global.html#decode_iTXt">decode_iTXt</a></li><li><a href="global.html#decode_pHYs">decode_pHYs</a></li><li><a href="global.html#decode_pHYs_PPI">decode_pHYs_PPI</a></li><li><a href="global.html#encode">encode</a></li><li><a href="global.html#encodeChunk">encodeChunk</a></li><li><a href="global.html#encodeChunks">encodeChunks</a></li><li><a href="global.html#encodeHeader">encodeHeader</a></li><li><a href="global.html#encode_IDAT_raw">encode_IDAT_raw</a></li><li><a href="global.html#encode_IHDR">encode_IHDR</a></li><li><a href="global.html#encode_iCCP">encode_iCCP</a></li><li><a href="global.html#encode_iTXt">encode_iTXt</a></li><li><a href="global.html#encode_pHYs">encode_pHYs</a></li><li><a href="global.html#encode_pHYs_PPI">encode_pHYs_PPI</a></li><li><a href="global.html#encode_sRGB">encode_sRGB</a></li><li><a href="global.html#encode_standardChromatics">encode_standardChromatics</a></li><li><a href="global.html#encode_standardGamma">encode_standardGamma</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#matchesChunkType">matchesChunkType</a></li><li><a href="global.html#pngChunkReader">pngChunkReader</a></li><li><a href="global.html#readIHDR">readIHDR</a></li><li><a href="global.html#withoutChunks">withoutChunks</a></li></ul>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ChunkType">ChunkType</a></li><li><a href="global.html#ColorType">ColorType</a></li><li><a href="global.html#FilterMethod">FilterMethod</a></li><li><a href="global.html#Intent">Intent</a></li><li><a href="global.html#chunkNameToType">chunkNameToType</a></li><li><a href="global.html#chunkTypeToName">chunkTypeToName</a></li><li><a href="global.html#colorTypeToString">colorTypeToString</a></li><li><a href="global.html#crc32">crc32</a></li><li><a href="global.html#decode_IHDR">decode_IHDR</a></li><li><a href="global.html#decode_iCCP">decode_iCCP</a></li><li><a href="global.html#decode_iTXt">decode_iTXt</a></li><li><a href="global.html#decode_pHYs">decode_pHYs</a></li><li><a href="global.html#decode_pHYs_PPI">decode_pHYs_PPI</a></li><li><a href="global.html#encode">encode</a></li><li><a href="global.html#encodeChunk">encodeChunk</a></li><li><a href="global.html#encodeHeader">encodeHeader</a></li><li><a href="global.html#encode_IDAT_raw">encode_IDAT_raw</a></li><li><a href="global.html#encode_IHDR">encode_IHDR</a></li><li><a href="global.html#encode_iCCP">encode_iCCP</a></li><li><a href="global.html#encode_iTXt">encode_iTXt</a></li><li><a href="global.html#encode_pHYs">encode_pHYs</a></li><li><a href="global.html#encode_pHYs_PPI">encode_pHYs_PPI</a></li><li><a href="global.html#encode_sRGB">encode_sRGB</a></li><li><a href="global.html#encode_standardChromatics">encode_standardChromatics</a></li><li><a href="global.html#encode_standardGamma">encode_standardGamma</a></li><li><a href="global.html#flattenBuffers">flattenBuffers</a></li><li><a href="global.html#readChunks">readChunks</a></li><li><a href="global.html#readIHDR">readIHDR</a></li><li><a href="global.html#reader">reader</a></li><li><a href="global.html#writeChunks">writeChunks</a></li></ul>
 </nav>
 
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 10:51:58 GMT+0100 (British Summer Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.3</a> on Tue May 28 2024 11:36:11 GMT+0100 (British Summer Time)
 </footer>
 
 <script> prettyPrint(); </script>
