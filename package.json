@@ -1,6 +1,6 @@
 {
   "name": "png-tools",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "low-level PNG codec tools",
   "main": "./index.js",
   "license": "MIT",
