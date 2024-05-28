@@ -33,7 +33,7 @@ npm install png-tools --save
 
 ## Docs
 
-TODO.
+Full documentation [here](https://mattdesl.github.io/png-tools/).
 
 ## Recipes
 
