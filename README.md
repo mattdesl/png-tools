@@ -8,7 +8,7 @@ Some features:
 
 - Plain JS ES modules, zero dependencies, tree-shakeable
 - Compatible with web, node, deno, bun, bare
-- Highly optimised; sometimes 2-6 times faster than [fast-png](https://www.npmjs.com/package/fast-png)
+- Highly optimised; sometimes 1.2-6x faster than [fast-png](https://www.npmjs.com/package/fast-png)
 - Supports parallel (multithreaded) encoding
 - Streamable and cancellable (e.g. WebWorkers and File System API streaming for massive files)
 - Allows embedding color profile and DPI metadata for print-ready files
