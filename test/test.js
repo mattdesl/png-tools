@@ -159,7 +159,7 @@ test("decode round trips encoder output", async (t) => {
     const colorType = input.channels === 4 ? ColorType.RGBA : ColorType.RGB;
     for (const filter of Object.values(FilterMethod)) {
       const encoded = encode({ ...input, colorType, filter }, deflate);
-      const decoded = decode(encoded, inflate, { preserveChannels: true });
+      const decoded = decode(encoded, inflate, { preserveFormat: true });
       t.equal(decoded.width, input.width);
       t.equal(decoded.height, input.height);
       t.equal(decoded.depth, input.depth);
@@ -169,12 +169,27 @@ test("decode round trips encoder output", async (t) => {
 
       const rgba = decode(encoded, inflate);
       t.equal(rgba.channels, 4);
+      t.equal(rgba.colorType, ColorType.RGBA);
+      t.equal(rgba.depth, input.depth);
+      t.equal(rgba.sourceColorType, colorType);
+      t.equal(rgba.sourceDepth, input.depth);
       t.deepEqual(
         rgba.data,
         toRGBA(input.data, input.channels, input.depth),
         `img ${i} filter ${filter} RGBA`
       );
     }
+  }
+});
+
+test("normalized decode output can be re-encoded", async (t) => {
+  for (const input of pngs) {
+    const colorType = input.channels === 4 ? ColorType.RGBA : ColorType.RGB;
+    const decoded = decode(encode({ ...input, colorType }, deflate), inflate);
+    const roundTrip = decode(encode(decoded, deflate), inflate);
+    t.equal(roundTrip.colorType, ColorType.RGBA);
+    t.equal(roundTrip.channels, 4);
+    t.deepEqual(roundTrip.data, decoded.data);
   }
 });
 
@@ -196,7 +211,7 @@ test("decode concatenates multiple IDAT chunks", async (t) => {
       : chunk
   );
   t.deepEqual(
-    decode(writeChunks(split), inflate, { preserveChannels: true }).data,
+    decode(writeChunks(split), inflate, { preserveFormat: true }).data,
     input.data
   );
 });
@@ -228,16 +243,14 @@ test("decode indexed PNG depths and transparency", async (t) => {
       expected.set(palette.subarray(index * 3, index * 3 + 3), i * 4);
       expected[i * 4 + 3] = transparency[index];
     }
-    t.equal(decoded.colorType, ColorType.INDEXED);
-    t.equal(decoded.depth, depth);
+    t.equal(decoded.colorType, ColorType.RGBA);
+    t.equal(decoded.depth, 8);
+    t.equal(decoded.sourceColorType, ColorType.INDEXED);
+    t.equal(decoded.sourceDepth, depth);
     t.equal(decoded.channels, 4);
     t.deepEqual(decoded.data, expected, `${depth}-bit indexed data`);
 
-    const options = {
-      preserveIndexed: true,
-      preserveChannels: true,
-      customInflateOption: depth,
-    };
+    const options = { preserveFormat: true, customInflateOption: depth };
     let receivedOptions;
     const preserved = decode(
       encoded,
@@ -252,18 +265,19 @@ test("decode indexed PNG depths and transparency", async (t) => {
       expectedPalette.set(palette.subarray(i * 3, i * 3 + 3), i * 4);
       expectedPalette[i * 4 + 3] = transparency[i];
     }
+    t.equal(preserved.colorType, ColorType.INDEXED);
+    t.equal(preserved.depth, depth);
     t.equal(preserved.channels, 1);
     t.deepEqual(preserved.data, indices, `${depth}-bit preserved indices`);
     t.deepEqual(preserved.palette, expectedPalette, `${depth}-bit RGBA palette`);
     t.deepEqual(receivedOptions, { customInflateOption: depth });
     t.deepEqual(options, {
-      preserveIndexed: true,
-      preserveChannels: true,
+      preserveFormat: true,
       customInflateOption: depth,
     });
 
     const reencoded = encode(preserved, deflate);
-    const roundTrip = decode(reencoded, inflate, { preserveIndexed: true });
+    const roundTrip = decode(reencoded, inflate, { preserveFormat: true });
     t.equal(readIHDR(reencoded).depth, depth);
     t.deepEqual(roundTrip.data, indices, `${depth}-bit re-encoded indices`);
     t.deepEqual(
@@ -290,20 +304,6 @@ test("decode indexed PNG depths and transparency", async (t) => {
     new Uint8Array([0, 255, 0, 255, 255, 0, 0, 255])
   );
 
-  const opaqueRGB = decode(
-    encodeIndexed({
-      width: 2,
-      height: 1,
-      depth: 1,
-      indices: new Uint8Array([1, 0]),
-      palette: palette.subarray(0, 6),
-    }),
-    inflate,
-    { preserveChannels: true }
-  );
-  t.equal(opaqueRGB.channels, 3);
-  t.deepEqual(opaqueRGB.data, new Uint8Array([0, 255, 0, 255, 0, 0]));
-
   const preservedOpaque = decode(
     encodeIndexed({
       width: 2,
@@ -313,8 +313,10 @@ test("decode indexed PNG depths and transparency", async (t) => {
       palette: palette.subarray(0, 6),
     }),
     inflate,
-    { preserveIndexed: true }
+    { preserveFormat: true }
   );
+  t.equal(preservedOpaque.channels, 1);
+  t.deepEqual(preservedOpaque.data, new Uint8Array([1, 0]));
   t.deepEqual(
     preservedOpaque.palette,
     new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255])
@@ -344,7 +346,7 @@ test("encode indexed PNG input", async (t) => {
     "trims trailing opaque alpha entries"
   );
 
-  const decoded = decode(encoded, inflate, { preserveIndexed: true });
+  const decoded = decode(encoded, inflate, { preserveFormat: true });
   t.deepEqual(decoded.data, data);
   t.deepEqual(decoded.palette, palette);
 
@@ -362,7 +364,7 @@ test("encode indexed PNG input", async (t) => {
       deflate
     );
     t.deepEqual(
-      decode(filtered, inflate, { preserveIndexed: true }).data,
+      decode(filtered, inflate, { preserveFormat: true }).data,
       data,
       `indexed filter ${filter}`
     );
@@ -421,10 +423,12 @@ test("decode grayscale color types", async (t) => {
   const grayscale1 = decode(
     grayscale1PNG,
     inflate,
-    { preserveChannels: true }
+    { preserveFormat: true }
   );
   t.equal(grayscale1.channels, 1);
-  t.deepEqual(grayscale1.data, new Uint8Array([0, 255, 0, 255]));
+  t.equal(grayscale1.depth, 1);
+  t.equal(grayscale1.colorType, ColorType.GRAYSCALE);
+  t.deepEqual(grayscale1.data, new Uint8Array([0, 1, 0, 1]));
   t.deepEqual(
     decode(grayscale1PNG, inflate).data,
     new Uint8Array([
@@ -444,7 +448,7 @@ test("decode grayscale color types", async (t) => {
       raw: new Uint8Array([0, 0x12, 0x34, 0xab, 0xcd]),
     }),
     inflate,
-    { preserveChannels: true }
+    { preserveFormat: true }
   );
   t.deepEqual(grayscale16.data, new Uint16Array([0x1234, 0xabcd]));
 
@@ -457,7 +461,7 @@ test("decode grayscale color types", async (t) => {
       raw: new Uint8Array([0, 20, 255, 100, 80]),
     }),
     inflate,
-    { preserveChannels: true }
+    { preserveFormat: true }
   );
   t.equal(grayscaleAlpha.channels, 2);
   t.deepEqual(grayscaleAlpha.data, new Uint8Array([20, 255, 100, 80]));
@@ -477,20 +481,33 @@ test("decode grayscale color types", async (t) => {
 });
 
 test("decode expands tRNS transparency to RGBA", async (t) => {
-  const rgb = decode(
-    encodeRawPNG({
-      width: 2,
-      height: 1,
-      depth: 8,
-      colorType: ColorType.RGB,
-      raw: new Uint8Array([0, 10, 20, 30, 40, 50, 60]),
-      transparency: new Uint8Array([0, 10, 0, 20, 0, 30]),
-    }),
-    inflate
-  );
+  const rgbPNG = encodeRawPNG({
+    width: 2,
+    height: 1,
+    depth: 8,
+    colorType: ColorType.RGB,
+    raw: new Uint8Array([0, 10, 20, 30, 40, 50, 60]),
+    transparency: new Uint8Array([0, 10, 0, 20, 0, 30]),
+  });
+  const rgb = decode(rgbPNG, inflate);
   t.deepEqual(
     rgb.data,
     new Uint8Array([10, 20, 30, 0, 40, 50, 60, 255])
+  );
+  const nativeRGB = decode(rgbPNG, inflate, { preserveFormat: true });
+  t.equal(nativeRGB.colorType, ColorType.RGB);
+  t.equal(nativeRGB.channels, 3);
+  t.deepEqual(nativeRGB.data, new Uint8Array([10, 20, 30, 40, 50, 60]));
+  t.deepEqual(nativeRGB.transparentColor, new Uint16Array([10, 20, 30]));
+
+  const reencoded = encode(nativeRGB, deflate);
+  t.deepEqual(
+    readChunks(reencoded).find((chunk) => chunk.type === ChunkType.tRNS).data,
+    new Uint8Array([0, 10, 0, 20, 0, 30])
+  );
+  t.deepEqual(
+    decode(reencoded, inflate, { preserveFormat: true }).transparentColor,
+    nativeRGB.transparentColor
   );
 
   const grayscale = decode(

@@ -12,6 +12,7 @@ import { encode_IHDR, encode_IDAT_raw } from "./chunks.js";
  * @property {number} [filterMethod=FilterMethod.Paeth] the filter method to use
  * @property {number} [firstFilter=filter] the first scanline filter method to use
  * @property {Uint8Array} [palette] flat RGBA entries for indexed encoding
+ * @property {Uint16Array} [transparentColor] RGB samples for a tRNS chunk
  * @property {Chunk[]} [ancillary=[]] additional chunks to include in the PNG
  */
 
@@ -60,9 +61,33 @@ export function encode(options = {}, deflate, deflateOptions) {
 }
 
 function encodeImage(options, data, ancillary, deflate, deflateOptions) {
+  let trns;
+  if (options.transparentColor) {
+    if ((options.colorType ?? ColorType.RGBA) !== ColorType.RGB) {
+      throw new Error("transparentColor is only supported for RGB encoding");
+    }
+    if (ancillary.some((chunk) => chunk.type === ChunkType.tRNS)) {
+      throw new Error("tRNS is already specified by transparentColor");
+    }
+    const color = options.transparentColor;
+    const max = (options.depth ?? 8) === 16 ? 0xffff : 0xff;
+    if (color.length !== 3) {
+      throw new Error("RGB transparentColor must contain three samples");
+    }
+    trns = new Uint8Array(6);
+    const view = new DataView(trns.buffer);
+    for (let i = 0; i < 3; i++) {
+      if (!Number.isInteger(color[i]) || color[i] < 0 || color[i] > max) {
+        throw new Error("transparentColor sample is outside the image depth");
+      }
+      view.setUint16(i * 2, color[i]);
+    }
+  }
+
   return writeChunks([
     { type: ChunkType.IHDR, data: encode_IHDR(options) },
     ...ancillary,
+    ...(trns ? [{ type: ChunkType.tRNS, data: trns }] : []),
     {
       type: ChunkType.IDAT,
       data: deflate(encode_IDAT_raw(data, options), deflateOptions),

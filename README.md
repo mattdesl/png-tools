@@ -73,53 +73,58 @@ See [examples/node-encode.js](./examples/node-encode.js) and [examples/encode-si
 
 ### Decode Pixel Data
 
-Like `encode()`, `decode()` expects you to provide the compression primitive so
-the library remains dependency-free and tree-shakeable.
+Pass a pngBuffer and your own INFLATE (e.g. [pako](https://npmjs.com/package/pako)) and get back RGBA pixel data.
 
 ```js
 import { decode } from "png-tools";
 import { inflate } from "pako";
 
-const { data, width, height, depth, colorType, channels } = decode(
-  pngBuffer,
-  inflate
-);
+const { data, width, height, depth } = decode(pngBuffer, inflate);
 ```
 
-RGB, RGBA, grayscale, grayscale-alpha, and indexed PNG color types are
-supported. By default every format is expanded to RGBA so callers can consume a
-consistent four-channel layout. Set `preserveChannels: true` to retain native
-RGB, RGBA, grayscale, or grayscale-alpha pixel channels. Indexed images remain
-palette-expanded in this mode, using RGB or RGBA according to their
-transparency.
+By default, the data is expanded to `RGBA`, the data will be `Uint8Array` if `depth` is 8, or `Uint16Array` if `depth` is 16.
 
-The returned `colorType` and `depth` always describe the source PNG, while
-`channels` describes the decoded `data` layout. Decoder-specific options are
-removed before the remaining options are passed to the provided inflate
-function.
-
-To retain an indexed PNG without expanding every pixel to RGB or RGBA, set
-`preserveIndexed`. The returned `data` contains one unpacked `Uint8` palette
-index per pixel and `palette` contains RGBA entries:
+You can also request to preserve the source data format, but this will require you to handle indexing and transparency:
 
 ```js
-const { data, palette } = decode(pngBuffer, inflate, {
-  preserveIndexed: true,
+const {
+  data,
+  palette,
+  width,
+  height,
+  depth,
+  colorType,
+  channels,
+  transparentColor,
+} = decode(pngBuffer, inflate, {
+  preserveFormat: true,
   /* other inflate options */
 });
 
-const index = data[pixelIndex];
-const red = palette[index * 4];
-const alpha = palette[index * 4 + 3];
-```
+const pixelIndex = 0;
 
-This preserved result can be passed directly back into `encode()`.
+if (colorType == ColorType.INDEXED) {
+  // indexed palette is always normalised to RGBA
+  const index = data[pixelIndex];
+  const red = palette[index * 4];
+  const alpha = palette[index * 4 + 3]; // expanded to 0xff
+} else {
+  // might be grayscale, gray-alpha, rgba or rgb
+  const v = data[pixelIndex];
+  // any pixels that match the transparent color, if it exists, should be made transparent
+  if (transparentColor) {
+    if (image.colorType === ColorType.GRAYSCALE) {
+      console.log("Transparent gray:", image.transparentColor[0]);
+    } else {
+      console.log("Transparent RGB:", image.transparentColor);
+    }
+  }
+}
+```
 
 ### Encode Indexed Pixel Data
 
-Indexed input uses one unpacked `Uint8` index per pixel and a flat RGBA
-`Uint8Array` palette. Supplying a palette implies `ColorType.INDEXED`, and the
-smallest valid PNG bit depth is inferred from its number of entries:
+To encode an indexed image, pass indices and flat RGBA palette both as `Uint8Array`. If `palette` is passed, `ColorType.INDEXED` is implied, and the packed depth is implied from the given palette size. `palette` cannot be larger than 256 colors.
 
 ```js
 const png = encode(
@@ -129,14 +134,9 @@ const png = encode(
     data: indices,
     palette: rgbaPalette,
   },
-  deflate
+  deflate,
 );
 ```
-
-The palette may contain at most 256 entries. Set `depth` to `1`, `2`, `4`, or
-`8` to override inference. The encoder packs indices into that depth, generates
-`PLTE`, and generates a trimmed `tRNS` only when the RGBA palette contains
-transparency.
 
 ### More Encoding Options
 
@@ -408,7 +408,7 @@ buf = encode(
     height: 128,
     filter: FilterMethod.None,
   },
-  deflate
+  deflate,
 );
 ```
 
