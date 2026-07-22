@@ -143,8 +143,7 @@ All PNG `colorType` options can be encoded with different `depth` – grayscale 
 support 8 or 16 bits. Low-bit grayscale input uses one unpacked `Uint8` sample
 per pixel with values in the source range—for example, `0` through `3` at 2-bit depth.
 
-You can specify a different filter method applied to all scanlines, as well as
-`ancillary` chunks inserted before image data (IDAT).
+Pass `filter` for a different all-scanline filter, or pass `ancillary` for additional chunks inserted before image data (IDAT).
 
 ```js
 import {
