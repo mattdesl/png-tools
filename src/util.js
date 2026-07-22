@@ -80,50 +80,40 @@ export function applyFilter(
   bytesPerPixel,
   bytesPerScanline,
   srcIdxInBytes,
-  dstIdxInBytesPlusOne,
-  inputView,
-  outputView
+  dstIdxInBytesPlusOne
 ) {
-  if (filter === FilterMethod.Paeth) {
+  const effectiveFilter = simplifyFirstRowFilter(filter, i);
+  const pixelsAlignToWords = bytesPerPixel % 4 === 0;
+  if (effectiveFilter === FilterMethod.Paeth) {
+    const above = srcIdxInBytes - bytesPerScanline;
     let j = 0;
-    if (i === 0) {
-      for (; j < bytesPerPixel; j++) {
-        out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
-      }
-      for (; j < bytesPerScanline; j++) {
-        out[dstIdxInBytesPlusOne + j] =
-          data[srcIdxInBytes + j] -
-          data[srcIdxInBytes + j - bytesPerPixel];
-      }
-    } else {
-      const above = srcIdxInBytes - bytesPerScanline;
-      for (; j < bytesPerPixel; j++) {
-        out[dstIdxInBytesPlusOne + j] =
-          data[srcIdxInBytes + j] - data[above + j];
-      }
-      for (; j < bytesPerScanline; j++) {
-        const left = data[srcIdxInBytes + j - bytesPerPixel];
-        const up = data[above + j];
-        const upLeft = data[above + j - bytesPerPixel];
-        const distanceLeft = Math.abs(up - upLeft);
-        const distanceUp = Math.abs(left - upLeft);
-        const distanceUpLeft = Math.abs(left + up - 2 * upLeft);
-        const predictor =
-          distanceLeft <= distanceUp && distanceLeft <= distanceUpLeft
-            ? left
-            : distanceUp <= distanceUpLeft
-              ? up
-              : upLeft;
-        out[dstIdxInBytesPlusOne + j] =
-          data[srcIdxInBytes + j] - predictor;
-      }
+    for (; j < bytesPerPixel; j++) {
+      out[dstIdxInBytesPlusOne + j] =
+        data[srcIdxInBytes + j] - data[above + j];
     }
-  } else if (filter === FilterMethod.Sub) {
-    if ((bytesPerPixel & 3) === 0) {
-      const input =
-        inputView ?? new DataView(data.buffer, data.byteOffset, data.byteLength);
-      const output =
-        outputView ?? new DataView(out.buffer, out.byteOffset, out.byteLength);
+    for (; j < bytesPerScanline; j++) {
+      const left = data[srcIdxInBytes + j - bytesPerPixel];
+      const up = data[above + j];
+      const upLeft = data[above + j - bytesPerPixel];
+      const distanceLeft = Math.abs(up - upLeft);
+      const distanceUp = Math.abs(left - upLeft);
+      const distanceUpLeft = Math.abs(left + up - 2 * upLeft);
+      const predictor =
+        distanceLeft <= distanceUp && distanceLeft <= distanceUpLeft
+          ? left
+          : distanceUp <= distanceUpLeft
+            ? up
+            : upLeft;
+      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - predictor;
+    }
+    return;
+  }
+
+  const input = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const output = new DataView(out.buffer, out.byteOffset, out.byteLength);
+
+  if (effectiveFilter === FilterMethod.Sub) {
+    if (pixelsAlignToWords) {
       out.set(
         data.subarray(srcIdxInBytes, srcIdxInBytes + bytesPerPixel),
         dstIdxInBytesPlusOne
@@ -131,7 +121,7 @@ export function applyFilter(
       for (let j = bytesPerPixel; j < bytesPerScanline; j += 4) {
         output.setUint32(
           dstIdxInBytesPlusOne + j,
-          subtractBytes(
+          subtractPackedBytes(
             input.getUint32(srcIdxInBytes + j),
             input.getUint32(srcIdxInBytes + j - bytesPerPixel)
           )
@@ -148,41 +138,30 @@ export function applyFilter(
         data[srcIdxInBytes + j] -
         data[srcIdxInBytes + j - bytesPerPixel];
     }
-  } else if (filter === FilterMethod.Up) {
-    if (i === 0) {
-      out.set(
-        data.subarray(srcIdxInBytes, srcIdxInBytes + bytesPerScanline),
-        dstIdxInBytesPlusOne
+  } else if (effectiveFilter === FilterMethod.None) {
+    out.set(
+      data.subarray(srcIdxInBytes, srcIdxInBytes + bytesPerScanline),
+      dstIdxInBytesPlusOne
+    );
+  } else if (effectiveFilter === FilterMethod.Up) {
+    const above = srcIdxInBytes - bytesPerScanline;
+    const packedLength = bytesPerScanline - (bytesPerScanline % 4);
+    let j = 0;
+    for (; j < packedLength; j += 4) {
+      output.setUint32(
+        dstIdxInBytesPlusOne + j,
+        subtractPackedBytes(
+          input.getUint32(srcIdxInBytes + j),
+          input.getUint32(above + j)
+        )
       );
-    } else {
-      const above = srcIdxInBytes - bytesPerScanline;
-      const input =
-        inputView ?? new DataView(data.buffer, data.byteOffset, data.byteLength);
-      const output =
-        outputView ?? new DataView(out.buffer, out.byteOffset, out.byteLength);
-      const wordEnd = bytesPerScanline & ~3;
-      let j = 0;
-      for (; j < wordEnd; j += 4) {
-        output.setUint32(
-          dstIdxInBytesPlusOne + j,
-          subtractBytes(
-            input.getUint32(srcIdxInBytes + j),
-            input.getUint32(above + j)
-          )
-        );
-      }
-      for (; j < bytesPerScanline; j++) {
-        out[dstIdxInBytesPlusOne + j] =
-          data[srcIdxInBytes + j] - data[above + j];
-      }
-      return;
     }
-  } else if (filter === FilterMethod.Average) {
-    if ((bytesPerPixel & 3) === 0) {
-      const input =
-        inputView ?? new DataView(data.buffer, data.byteOffset, data.byteLength);
-      const output =
-        outputView ?? new DataView(out.buffer, out.byteOffset, out.byteLength);
+    for (; j < bytesPerScanline; j++) {
+      out[dstIdxInBytesPlusOne + j] =
+        data[srcIdxInBytes + j] - data[above + j];
+    }
+  } else if (effectiveFilter === FilterMethod.Average) {
+    if (pixelsAlignToWords) {
       const above = srcIdxInBytes - bytesPerScanline;
       for (let j = 0; j < bytesPerScanline; j += 4) {
         const left =
@@ -192,9 +171,9 @@ export function applyFilter(
         const up = i === 0 ? 0 : input.getUint32(above + j);
         output.setUint32(
           dstIdxInBytesPlusOne + j,
-          subtractBytes(
+          subtractPackedBytes(
             input.getUint32(srcIdxInBytes + j),
-            averageBytes(left, up)
+            averagePackedBytes(left, up)
           )
         );
       }
@@ -223,31 +202,38 @@ export function applyFilter(
       }
     }
   }
+}
 
-  // Should never get here in this version as applyFilter is only called
-  // when a non-None filter is specified
-  // if (filter === FilterMethod.None) {
-  //   for (let j = 0; j < bytesPerScanline; j++) {
-  //     out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
-  //   }
-  // }
+export function simplifyFirstRowFilter(filter, rowIndex) {
+  if (rowIndex !== 0) return filter;
+  // With no row above, Up is None and Paeth is Sub.
+  if (filter === FilterMethod.Up) return FilterMethod.None;
+  if (filter === FilterMethod.Paeth) return FilterMethod.Sub;
+  return filter;
 }
 
 const BYTE_HIGH_BITS = 0x80808080;
 const BYTE_LOW_BITS = 0x7f7f7f7f;
 
+export function addPackedBytes(value, addition) {
+  return (
+    ((value & BYTE_LOW_BITS) + (addition & BYTE_LOW_BITS)) ^
+    ((value ^ addition) & BYTE_HIGH_BITS)
+  );
+}
+
 // Compute four independent modulo-256 byte subtractions without allowing a
 // borrow to cross byte boundaries.
-function subtractBytes(value, minus) {
+export function subtractPackedBytes(value, subtraction) {
   return (
-    ((value | BYTE_HIGH_BITS) - (minus & BYTE_LOW_BITS)) ^
-    (~(value ^ minus) & BYTE_HIGH_BITS)
+    ((value | BYTE_HIGH_BITS) - (subtraction & BYTE_LOW_BITS)) ^
+    (~(value ^ subtraction) & BYTE_HIGH_BITS)
   );
 }
 
 // Compute floor((a + b) / 2) independently in each packed byte.
-function averageBytes(a, b) {
-  return (a & b) + (((a ^ b) & 0xfefefefe) >>> 1);
+export function averagePackedBytes(first, second) {
+  return (first & second) + (((first ^ second) & 0xfefefefe) >>> 1);
 }
 
 export function paethPredictor(left, above, upLeft) {

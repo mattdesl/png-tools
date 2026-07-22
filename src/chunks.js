@@ -404,13 +404,6 @@ export function encode_IDAT_raw(data, opts = {}) {
 
   const expectedByteLength = scanlineCount * bytesPerScanline;
   const out = new Uint8Array(expectedByteLength + scanlineCount);
-  const usesFilter =
-    filter !== FilterMethod.None || firstFilter !== FilterMethod.None;
-  const outDV = usesFilter ? new DataView(out.buffer) : undefined;
-  const dataDV =
-    usesFilter && depth === 8
-      ? new DataView(data.buffer, data.byteOffset, data.byteLength)
-      : undefined;
 
   if (depth === 16) {
     // Special case: we need to deal with endianness by converting input into big endian
@@ -460,9 +453,7 @@ export function encode_IDAT_raw(data, opts = {}) {
           bytesPerPixel,
           bytesPerScanline,
           srcIdxInBytes,
-          dstIdxInBytesPlusOne,
-          packedDV,
-          outDV
+          dstIdxInBytesPlusOne
         );
       }
     }
@@ -491,9 +482,7 @@ export function encode_IDAT_raw(data, opts = {}) {
           bytesPerPixel,
           bytesPerScanline,
           srcIdxInBytes,
-          dstIdxInBytesPlusOne,
-          dataDV,
-          outDV
+          dstIdxInBytesPlusOne
         );
       }
     }
