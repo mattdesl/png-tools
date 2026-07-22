@@ -21,21 +21,36 @@ import {
  * @property {number} depth the PNG bit depth
  * @property {ColorType} colorType the PNG color type
  * @property {number} channels the number of channels in `data`
+ * @property {Uint8Array} [palette] the RGBA palette when preserving indexed data
  **/
 
 /**
  * Decodes a PNG into pixel data, using the specified `inflate` algorithm and
- * optional decompression options. Indexed images are expanded to RGB or RGBA.
+ * optional decompression options. Pixels are expanded to RGBA by default. Set
+ * `preserveChannels` to retain the source channel layout, or
+ * `preserveIndexed` to return one palette index per pixel and an RGBA palette.
  * The inflate function should have the signature
  * `(buf, [inflateOptions]) => Uint8Array`.
  *
  * @param {ArrayBufferView} buf the PNG buffer to decode
  * @param {Function} inflate the sync inflate function to use
- * @param {Object} [inflateOptions] optional options passed to inflate()
+ * @param {Object} [options] optional inflate and decoder options
  * @returns {DecodeResult}
  **/
-export function decode(buf, inflate, inflateOptions) {
+export function decode(buf, inflate, options) {
   if (!inflate) throw new Error(`must specify an inflate function`);
+
+  const preserveIndexed = options?.preserveIndexed === true;
+  const preserveChannels = options?.preserveChannels === true;
+  let inflateOptions = options;
+  if (
+    options &&
+    ("preserveIndexed" in options || "preserveChannels" in options)
+  ) {
+    inflateOptions = { ...options };
+    delete inflateOptions.preserveIndexed;
+    delete inflateOptions.preserveChannels;
+  }
 
   let meta;
   let palette;
@@ -85,6 +100,7 @@ export function decode(buf, inflate, inflateOptions) {
 
   const packed = raw.subarray(0, rowBytes * height);
   let data;
+  let resultPalette;
   let channels = sourceChannels;
 
   if (colorType === ColorType.INDEXED) {
@@ -98,16 +114,25 @@ export function decode(buf, inflate, inflateOptions) {
     if (transparency && transparency.length > entries) {
       throw new Error("Invalid indexed PNG: tRNS exceeds palette size");
     }
-    channels = transparency ? 4 : 3;
-    data = expandPalette(
-      packed,
-      width,
-      height,
-      depth,
-      palette,
-      transparency,
-      channels
-    );
+    if (preserveIndexed) {
+      channels = 1;
+      data =
+        depth === 8
+          ? packed
+          : unpackSamples(packed, width, height, depth, false);
+      resultPalette = createPalette(palette, transparency);
+    } else {
+      channels = preserveChannels && !transparency ? 3 : 4;
+      data = expandPalette(
+        packed,
+        width,
+        height,
+        depth,
+        palette,
+        transparency,
+        channels
+      );
+    }
   } else if (depth < 8) {
     data = unpackSamples(packed, width, height, depth, true);
   } else if (depth === 16) {
@@ -116,7 +141,18 @@ export function decode(buf, inflate, inflateOptions) {
     data = packed;
   }
 
-  return { width, height, depth, colorType, channels, data };
+  if (
+    colorType !== ColorType.INDEXED &&
+    !preserveChannels &&
+    colorType !== ColorType.RGBA
+  ) {
+    data = expandToRGBA(data, width, height, depth, colorType, transparency);
+    channels = 4;
+  }
+
+  const result = { width, height, depth, colorType, channels, data };
+  if (resultPalette) result.palette = resultPalette;
+  return result;
 }
 
 function validateIHDR(meta) {
@@ -220,6 +256,86 @@ function unpackSamples(data, width, height, depth, scale) {
   return result;
 }
 
+function createPalette(palette, transparency) {
+  const result = new Uint8Array((palette.length / 3) * 4);
+  for (let src = 0, dst = 0, index = 0; src < palette.length; index++) {
+    result[dst++] = palette[src++];
+    result[dst++] = palette[src++];
+    result[dst++] = palette[src++];
+    result[dst++] =
+      transparency && index < transparency.length ? transparency[index] : 255;
+  }
+  return result;
+}
+
+function expandToRGBA(data, width, height, depth, colorType, transparency) {
+  const result =
+    depth === 16
+      ? new Uint16Array(width * height * 4)
+      : new Uint8Array(width * height * 4);
+  const max = depth === 16 ? 0xffff : 0xff;
+  let transparentGray;
+  let transparentRed;
+  let transparentGreen;
+  let transparentBlue;
+
+  if (transparency) {
+    const view = new DataView(
+      transparency.buffer,
+      transparency.byteOffset,
+      transparency.byteLength
+    );
+    if (colorType === ColorType.GRAYSCALE) {
+      if (transparency.length !== 2) {
+        throw new Error("Invalid grayscale PNG: malformed tRNS");
+      }
+      transparentGray = view.getUint16(0);
+      if (depth < 8) transparentGray *= 255 / ((1 << depth) - 1);
+    } else if (colorType === ColorType.RGB) {
+      if (transparency.length !== 6) {
+        throw new Error("Invalid RGB PNG: malformed tRNS");
+      }
+      transparentRed = view.getUint16(0);
+      transparentGreen = view.getUint16(2);
+      transparentBlue = view.getUint16(4);
+    }
+  }
+
+  if (colorType === ColorType.GRAYSCALE) {
+    for (let src = 0, dst = 0; src < data.length; src++) {
+      const gray = data[src];
+      result[dst++] = gray;
+      result[dst++] = gray;
+      result[dst++] = gray;
+      result[dst++] = gray === transparentGray ? 0 : max;
+    }
+  } else if (colorType === ColorType.GRAYSCALE_ALPHA) {
+    for (let src = 0, dst = 0; src < data.length; ) {
+      const gray = data[src++];
+      result[dst++] = gray;
+      result[dst++] = gray;
+      result[dst++] = gray;
+      result[dst++] = data[src++];
+    }
+  } else {
+    for (let src = 0, dst = 0; src < data.length; ) {
+      const red = data[src++];
+      const green = data[src++];
+      const blue = data[src++];
+      result[dst++] = red;
+      result[dst++] = green;
+      result[dst++] = blue;
+      result[dst++] =
+        red === transparentRed &&
+        green === transparentGreen &&
+        blue === transparentBlue
+          ? 0
+          : max;
+    }
+  }
+  return result;
+}
+
 function expandPalette(
   data,
   width,
@@ -246,7 +362,10 @@ function expandPalette(
       result[dst++] = palette[src + 1];
       result[dst++] = palette[src + 2];
       if (channels === 4) {
-        result[dst++] = index < transparency.length ? transparency[index] : 255;
+        result[dst++] =
+          transparency && index < transparency.length
+            ? transparency[index]
+            : 255;
       }
     }
   }

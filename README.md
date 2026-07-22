@@ -17,7 +17,7 @@ Some features:
 
 Some things that are not yet supported:
 
-- Supporting colorType encoding other than RGB and RGBA
+- Supporting grayscale or grayscale-alpha encoding
 - Adam7 interlaced encoding or decoding
 
 > 🔧 Note: this is a low-level library for maximum flexibility. A simpler API could be built on top of this framework that makes some more opinionated trade-offs.
@@ -87,13 +87,60 @@ const { data, width, height, depth, colorType, channels } = decode(
 ```
 
 RGB, RGBA, grayscale, grayscale-alpha, and indexed PNG color types are
-supported. Indexed pixels are expanded to RGB, or RGBA when the PNG contains a
-`tRNS` transparency chunk. The returned `colorType` and `depth` describe the
-source PNG, while `channels` describes the decoded `data` layout.
+supported. By default every format is expanded to RGBA so callers can consume a
+consistent four-channel layout. Set `preserveChannels: true` to retain native
+RGB, RGBA, grayscale, or grayscale-alpha pixel channels. Indexed images remain
+palette-expanded in this mode, using RGB or RGBA according to their
+transparency.
+
+The returned `colorType` and `depth` always describe the source PNG, while
+`channels` describes the decoded `data` layout. Decoder-specific options are
+removed before the remaining options are passed to the provided inflate
+function.
+
+To retain an indexed PNG without expanding every pixel to RGB or RGBA, set
+`preserveIndexed`. The returned `data` contains one unpacked `Uint8` palette
+index per pixel and `palette` contains RGBA entries:
+
+```js
+const { data, palette } = decode(pngBuffer, inflate, {
+  preserveIndexed: true,
+  /* other inflate options */
+});
+
+const index = data[pixelIndex];
+const red = palette[index * 4];
+const alpha = palette[index * 4 + 3];
+```
+
+This preserved result can be passed directly back into `encode()`.
+
+### Encode Indexed Pixel Data
+
+Indexed input uses one unpacked `Uint8` index per pixel and a flat RGBA
+`Uint8Array` palette. Supplying a palette implies `ColorType.INDEXED`, and the
+smallest valid PNG bit depth is inferred from its number of entries:
+
+```js
+const png = encode(
+  {
+    width,
+    height,
+    data: indices,
+    palette: rgbaPalette,
+  },
+  deflate
+);
+```
+
+The palette may contain at most 256 entries. Set `depth` to `1`, `2`, `4`, or
+`8` to override inference. The encoder packs indices into that depth, generates
+`PLTE`, and generates a trimmed `tRNS` only when the RGBA palette contains
+transparency.
 
 ### More Encoding Options
 
-You can encode RGB or RGBA, and 8 or 16 bits, with a different filter method that is applied to all scanlines. You can also specify a list of `ancillary` chunks which are inserted prior to image data (IDAT) chunks.
+You can encode RGB, RGBA, or indexed data with a different filter method that is applied to all scanlines. RGB and RGBA support 8 or 16 bits, while indexed data supports 1, 2, 4, or 8 bits. You can also specify a list of `ancillary` chunks which are inserted prior to image data (IDAT) chunks.
 
 ```js
 import {
