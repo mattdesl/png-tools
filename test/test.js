@@ -153,6 +153,27 @@ test("test png encoder filtering", async (t) => {
   }
 });
 
+test("png encoder validates filter options", (t) => {
+  const input = {
+    data: new Uint8Array([0, 0, 0, 255]),
+    width: 1,
+    height: 1,
+  };
+  t.throws(
+    () => encode({ ...input, firstFilter: -1 }, deflate),
+    /first filter type -1 unsupported/
+  );
+  t.throws(
+    () => encode({ ...input, firstFilter: 5 }, deflate),
+    /first filter type 5 unsupported/
+  );
+  t.throws(
+    () => encode({ ...input, firstFilter: 1.5 }, deflate),
+    /first filter type 1.5 unsupported/
+  );
+  t.end();
+});
+
 test("packed filtering matches scalar PNG filters", (t) => {
   for (const channels of [3, 4]) {
     const width = 7;

@@ -10,7 +10,7 @@ import { colorTypeToChannels } from "./util.js";
  * @property {number} height the height of the image
  * @property {ColorType} [colorType=ColorType.RGBA] the color type of the pixel data
  * @property {number} [depth=8] the bit depth of the image
- * @property {number} [filterMethod=FilterMethod.Paeth] the filter method to use
+ * @property {number} [filter=FilterMethod.Paeth] the filter method to use
  * @property {number} [firstFilter=filter] the first scanline filter method to use
  * @property {Uint8Array} [palette] flat RGBA entries for indexed encoding
  * @property {Uint16Array} [transparentColor] grayscale or RGB samples for a tRNS chunk

@@ -398,9 +398,8 @@ export function encode_IDAT_raw(data, opts = {}) {
     );
   }
 
-  if (filter < 0x00 || filter > 0x04) {
-    throw new Error(`filter type ${filter} unsupported`);
-  }
+  validateFilter(filter, "filter");
+  validateFilter(firstFilter, "first filter");
 
   const expectedByteLength = scanlineCount * bytesPerScanline;
   const out = new Uint8Array(expectedByteLength + scanlineCount);
@@ -489,4 +488,14 @@ export function encode_IDAT_raw(data, opts = {}) {
   }
 
   return out;
+}
+
+function validateFilter(filter, name) {
+  if (
+    !Number.isInteger(filter) ||
+    filter < FilterMethod.None ||
+    filter > FilterMethod.Paeth
+  ) {
+    throw new Error(`${name} type ${filter} unsupported`);
+  }
 }
