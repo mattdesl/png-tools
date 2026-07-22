@@ -4,7 +4,6 @@ import { chunkTypeToName, decode_IHDR } from "./chunks.js";
 import {
   colorTypeToChannels,
   flattenBuffers,
-  paethPredictor,
 } from "./util.js";
 
 /**
@@ -94,9 +93,7 @@ export function decode(buf, inflate, options) {
   }
 
   const bytesPerPixel = Math.max(1, Math.ceil((sourceChannels * depth) / 8));
-  unfilter(raw, height, rowBytes, bytesPerPixel);
-
-  const packed = raw.subarray(0, rowBytes * height);
+  const packed = unfilter(raw, height, rowBytes, bytesPerPixel);
   let data;
   let resultPalette;
   let transparentColor;
@@ -208,51 +205,145 @@ function validateIHDR(meta) {
   }
 }
 
-// Decode each scanline in the inflater's output, then compact the whole image
-// in place to discard filter bytes. This avoids another full image buffer.
+// Decode and compact each row in place. The compact destination always precedes
+// the filtered source, so unread input cannot be overwritten.
 function unfilter(data, height, rowBytes, bytesPerPixel) {
   const stride = rowBytes + 1;
+  const result = data;
+  const input = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const output = input;
   for (let y = 0; y < height; y++) {
     const row = y * stride;
     const filter = data[row];
-    const start = row + 1;
+    const source = row + 1;
+    const target = y * rowBytes;
     if (filter > 4) throw new Error(`Invalid PNG filter type ${filter}`);
-    if (filter === 0) continue;
 
-    if (filter === 1) {
-      for (let x = bytesPerPixel; x < rowBytes; x++) {
-        data[start + x] += data[start + x - bytesPerPixel];
+    if (filter === 0) {
+      result.copyWithin(target, source, source + rowBytes);
+    } else if (filter === 1) {
+      if ((bytesPerPixel & 3) === 0) {
+        result.set(
+          data.subarray(source, source + bytesPerPixel),
+          target
+        );
+        for (let x = bytesPerPixel; x < rowBytes; x += 4) {
+          output.setUint32(
+            target + x,
+            addBytes(
+              input.getUint32(source + x),
+              output.getUint32(target + x - bytesPerPixel)
+            )
+          );
+        }
+        continue;
+      }
+      let x = 0;
+      for (; x < bytesPerPixel; x++) result[target + x] = data[source + x];
+      for (; x < rowBytes; x++) {
+        result[target + x] =
+          data[source + x] + result[target + x - bytesPerPixel];
       }
     } else if (filter === 2) {
-      if (y === 0) continue;
-      for (let x = 0; x < rowBytes; x++) {
-        data[start + x] += data[start + x - stride];
+      if (y === 0) {
+        result.copyWithin(target, source, source + rowBytes);
+      } else {
+        const above = target - rowBytes;
+        const wordEnd = rowBytes & ~3;
+        let x = 0;
+        for (; x < wordEnd; x += 4) {
+          output.setUint32(
+            target + x,
+            addBytes(
+              input.getUint32(source + x),
+              output.getUint32(above + x)
+            )
+          );
+        }
+        for (; x < rowBytes; x++) {
+          result[target + x] = data[source + x] + result[above + x];
+        }
       }
     } else if (filter === 3) {
-      for (let x = 0; x < rowBytes; x++) {
-        const i = start + x;
-        const left = x < bytesPerPixel ? 0 : data[i - bytesPerPixel];
-        const above = y === 0 ? 0 : data[i - stride];
-        data[i] += (left + above) >> 1;
+      if ((bytesPerPixel & 3) === 0) {
+        const above = target - rowBytes;
+        for (let x = 0; x < rowBytes; x += 4) {
+          const left =
+            x < bytesPerPixel
+              ? 0
+              : output.getUint32(target + x - bytesPerPixel);
+          const up = y === 0 ? 0 : output.getUint32(above + x);
+          output.setUint32(
+            target + x,
+            addBytes(input.getUint32(source + x), averageBytes(left, up))
+          );
+        }
+        continue;
+      }
+      let x = 0;
+      if (y === 0) {
+        for (; x < bytesPerPixel; x++) result[target + x] = data[source + x];
+        for (; x < rowBytes; x++) {
+          result[target + x] =
+            data[source + x] + (result[target + x - bytesPerPixel] >> 1);
+        }
+      } else {
+        const above = target - rowBytes;
+        for (; x < bytesPerPixel; x++) {
+          result[target + x] = data[source + x] + (result[above + x] >> 1);
+        }
+        for (; x < rowBytes; x++) {
+          result[target + x] =
+            data[source + x] +
+            ((result[target + x - bytesPerPixel] + result[above + x]) >> 1);
+        }
       }
     } else {
-      for (let x = 0; x < rowBytes; x++) {
-        const i = start + x;
-        const left = x < bytesPerPixel ? 0 : data[i - bytesPerPixel];
-        const above = y === 0 ? 0 : data[i - stride];
-        const upperLeft =
-          y === 0 || x < bytesPerPixel
-            ? 0
-            : data[i - stride - bytesPerPixel];
-        data[i] += paethPredictor(left, above, upperLeft);
+      let x = 0;
+      if (y === 0) {
+        for (; x < bytesPerPixel; x++) result[target + x] = data[source + x];
+        for (; x < rowBytes; x++) {
+          result[target + x] =
+            data[source + x] + result[target + x - bytesPerPixel];
+        }
+      } else {
+        const above = target - rowBytes;
+        for (; x < bytesPerPixel; x++) {
+          result[target + x] = data[source + x] + result[above + x];
+        }
+        for (; x < rowBytes; x++) {
+          const left = result[target + x - bytesPerPixel];
+          const up = result[above + x];
+          const upperLeft = result[above + x - bytesPerPixel];
+          const distanceLeft = Math.abs(up - upperLeft);
+          const distanceUp = Math.abs(left - upperLeft);
+          const distanceUpperLeft = Math.abs(left + up - 2 * upperLeft);
+          const predictor =
+            distanceLeft <= distanceUp && distanceLeft <= distanceUpperLeft
+              ? left
+              : distanceUp <= distanceUpperLeft
+                ? up
+                : upperLeft;
+          result[target + x] = data[source + x] + predictor;
+        }
       }
     }
   }
+  return result.subarray(0, rowBytes * height);
+}
 
-  for (let y = 0; y < height; y++) {
-    const start = y * stride + 1;
-    data.copyWithin(y * rowBytes, start, start + rowBytes);
-  }
+const BYTE_HIGH_BITS = 0x80808080;
+const BYTE_LOW_BITS = 0x7f7f7f7f;
+
+function addBytes(a, b) {
+  return (
+    ((a & BYTE_LOW_BITS) + (b & BYTE_LOW_BITS)) ^
+    ((a ^ b) & BYTE_HIGH_BITS)
+  );
+}
+
+function averageBytes(a, b) {
+  return (a & b) + (((a ^ b) & 0xfefefefe) >>> 1);
 }
 
 function unpack16(data) {
