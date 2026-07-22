@@ -17,7 +17,6 @@ Some features:
 
 Some things that are not yet supported:
 
-- Supporting grayscale or grayscale-alpha encoding
 - Adam7 interlaced encoding or decoding
 
 > 🔧 Note: this is a low-level library for maximum flexibility. A simpler API could be built on top of this framework that makes some more opinionated trade-offs.
@@ -76,7 +75,7 @@ See [examples/node-encode.js](./examples/node-encode.js) and [examples/encode-si
 Pass a pngBuffer and your own INFLATE (e.g. [pako](https://npmjs.com/package/pako)) and get back RGBA pixel data.
 
 ```js
-import { decode } from "png-tools";
+import { decode, ColorType } from "png-tools";
 import { inflate } from "pako";
 
 const { data, width, height, depth } = decode(pngBuffer, inflate);
@@ -103,7 +102,7 @@ const {
 
 const pixelIndex = 0;
 
-if (colorType == ColorType.INDEXED) {
+if (colorType === ColorType.INDEXED) {
   // indexed palette is always normalised to RGBA
   const index = data[pixelIndex];
   const red = palette[index * 4];
@@ -113,10 +112,10 @@ if (colorType == ColorType.INDEXED) {
   const v = data[pixelIndex];
   // any pixels that match the transparent color, if it exists, should be made transparent
   if (transparentColor) {
-    if (image.colorType === ColorType.GRAYSCALE) {
-      console.log("Transparent gray:", image.transparentColor[0]);
+    if (colorType === ColorType.GRAYSCALE) {
+      console.log("Transparent gray:", transparentColor[0]);
     } else {
-      console.log("Transparent RGB:", image.transparentColor);
+      console.log("Transparent RGB:", transparentColor);
     }
   }
 }
@@ -140,7 +139,12 @@ const png = encode(
 
 ### More Encoding Options
 
-You can encode RGB, RGBA, or indexed data with a different filter method that is applied to all scanlines. RGB and RGBA support 8 or 16 bits, while indexed data supports 1, 2, 4, or 8 bits. You can also specify a list of `ancillary` chunks which are inserted prior to image data (IDAT) chunks.
+All PNG `colorType` options can be encoded with different `depth` – grayscale supports 1, 2, 4, 8, or 16 bits; indexed supports 1, 2, 4, or 8 bits; and grayscale-alpha, RGB, and RGBA
+support 8 or 16 bits. Low-bit grayscale input uses one unpacked `Uint8` sample
+per pixel with values in the source range—for example, `0` through `3` at 2-bit depth.
+
+You can specify a different filter method applied to all scanlines, as well as
+`ancillary` chunks inserted before image data (IDAT).
 
 ```js
 import {

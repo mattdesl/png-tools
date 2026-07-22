@@ -410,6 +410,154 @@ test("encode validates indexed input", async (t) => {
   );
 });
 
+test("encode grayscale depths and filters", async (t) => {
+  const width = 5;
+  const height = 2;
+  for (const depth of [1, 2, 4, 8, 16]) {
+    const max = depth === 16 ? 0xffff : (1 << depth) - 1;
+    const data =
+      depth === 16
+        ? new Uint16Array(width * height)
+        : new Uint8Array(width * height);
+    for (let i = 0; i < data.length; i++) data[i] = (i * 3) % (max + 1);
+
+    for (const filter of Object.values(FilterMethod)) {
+      const encoded = encode(
+        {
+          width,
+          height,
+          depth,
+          colorType: ColorType.GRAYSCALE,
+          data,
+          filter,
+        },
+        deflate
+      );
+      const preserved = decode(encoded, inflate, { preserveFormat: true });
+      t.equal(preserved.colorType, ColorType.GRAYSCALE);
+      t.equal(preserved.depth, depth);
+      t.equal(preserved.channels, 1);
+      t.deepEqual(preserved.data, data, `gray ${depth}-bit filter ${filter}`);
+      t.deepEqual(
+        decode(encoded, inflate).data,
+        grayscaleToRGBA(data, depth),
+        `gray ${depth}-bit filter ${filter} RGBA`
+      );
+    }
+
+    const preserved = decode(
+      encode(
+        { width, height, depth, colorType: ColorType.GRAYSCALE, data },
+        deflate
+      ),
+      inflate,
+      { preserveFormat: true }
+    );
+    t.deepEqual(
+      decode(encode(preserved, deflate), inflate, { preserveFormat: true }).data,
+      data,
+      `gray ${depth}-bit re-encode`
+    );
+  }
+});
+
+test("encode grayscale-alpha depths and filters", async (t) => {
+  const width = 3;
+  const height = 2;
+  for (const depth of [8, 16]) {
+    const max = depth === 16 ? 0xffff : 0xff;
+    const data =
+      depth === 16
+        ? new Uint16Array(width * height * 2)
+        : new Uint8Array(width * height * 2);
+    for (let i = 0; i < data.length; i += 2) {
+      data[i] = (i * 29) % (max + 1);
+      data[i + 1] = max - data[i];
+    }
+
+    for (const filter of Object.values(FilterMethod)) {
+      const encoded = encode(
+        {
+          width,
+          height,
+          depth,
+          colorType: ColorType.GRAYSCALE_ALPHA,
+          data,
+          filter,
+        },
+        deflate
+      );
+      const preserved = decode(encoded, inflate, { preserveFormat: true });
+      t.equal(preserved.colorType, ColorType.GRAYSCALE_ALPHA);
+      t.equal(preserved.depth, depth);
+      t.equal(preserved.channels, 2);
+      t.deepEqual(
+        preserved.data,
+        data,
+        `gray alpha ${depth}-bit filter ${filter}`
+      );
+      t.deepEqual(
+        decode(encoded, inflate).data,
+        grayscaleAlphaToRGBA(data, depth),
+        `gray alpha ${depth}-bit filter ${filter} RGBA`
+      );
+    }
+  }
+});
+
+test("encode grayscale transparentColor", async (t) => {
+  const encoded = encode(
+    {
+      width: 2,
+      height: 1,
+      depth: 4,
+      colorType: ColorType.GRAYSCALE,
+      data: new Uint8Array([2, 15]),
+      transparentColor: new Uint16Array([2]),
+    },
+    deflate
+  );
+  t.deepEqual(
+    readChunks(encoded).find((chunk) => chunk.type === ChunkType.tRNS).data,
+    new Uint8Array([0, 2])
+  );
+  t.deepEqual(
+    decode(encoded, inflate).data,
+    new Uint8Array([34, 34, 34, 0, 255, 255, 255, 255])
+  );
+  const preserved = decode(encoded, inflate, { preserveFormat: true });
+  t.deepEqual(preserved.transparentColor, new Uint16Array([2]));
+  t.deepEqual(
+    decode(encode(preserved, deflate), inflate, { preserveFormat: true })
+      .transparentColor,
+    new Uint16Array([2])
+  );
+});
+
+test("encode validates grayscale input", async (t) => {
+  const base = {
+    width: 1,
+    height: 1,
+    colorType: ColorType.GRAYSCALE,
+    data: new Uint8Array([0]),
+  };
+  t.throws(() => encode({ ...base, depth: 2, data: new Uint8Array([4]) }, deflate), /exceeds/);
+  t.throws(
+    () =>
+      encode(
+        {
+          ...base,
+          depth: 4,
+          colorType: ColorType.GRAYSCALE_ALPHA,
+          data: new Uint8Array([0, 0]),
+        },
+        deflate
+      ),
+    /unsupported depth/
+  );
+  t.throws(() => encode({ ...base, data: new Uint8Array(0) }, deflate), /pixel data/);
+});
+
 test("decode grayscale color types", async (t) => {
   t.equal(ColorType.GRAYSCALE, 0, "grayscale uses the PNG color type code");
 
@@ -752,6 +900,38 @@ function toRGBA(data, channels, depth) {
     result[dst++] = data[src++];
     result[dst++] = data[src++];
     result[dst++] = alpha;
+  }
+  return result;
+}
+
+function grayscaleToRGBA(data, depth) {
+  const result =
+    depth === 16
+      ? new Uint16Array(data.length * 4)
+      : new Uint8Array(data.length * 4);
+  const sourceMax = depth === 16 ? 0xffff : (1 << depth) - 1;
+  const outputMax = depth === 16 ? 0xffff : 0xff;
+  for (let src = 0, dst = 0; src < data.length; src++) {
+    const gray = (data[src] * outputMax) / sourceMax;
+    result[dst++] = gray;
+    result[dst++] = gray;
+    result[dst++] = gray;
+    result[dst++] = outputMax;
+  }
+  return result;
+}
+
+function grayscaleAlphaToRGBA(data, depth) {
+  const result =
+    depth === 16
+      ? new Uint16Array((data.length / 2) * 4)
+      : new Uint8Array((data.length / 2) * 4);
+  for (let src = 0, dst = 0; src < data.length; ) {
+    const gray = data[src++];
+    result[dst++] = gray;
+    result[dst++] = gray;
+    result[dst++] = gray;
+    result[dst++] = data[src++];
   }
   return result;
 }

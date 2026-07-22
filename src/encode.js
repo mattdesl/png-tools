@@ -1,10 +1,11 @@
 import crc32 from "./crc32.js";
 import { ChunkType, ColorType, PNG_HEADER } from "./constants.js";
 import { encode_IHDR, encode_IDAT_raw } from "./chunks.js";
+import { colorTypeToChannels } from "./util.js";
 
 /**
  * @typedef {Object} EncodeOptions
- * @property {Uint8Array} data the raw pixel data to encode
+ * @property {Uint8Array|Uint16Array} data the raw pixel data to encode
  * @property {number} width the width of the image
  * @property {number} height the height of the image
  * @property {ColorType} [colorType=ColorType.RGBA] the color type of the pixel data
@@ -12,7 +13,7 @@ import { encode_IHDR, encode_IDAT_raw } from "./chunks.js";
  * @property {number} [filterMethod=FilterMethod.Paeth] the filter method to use
  * @property {number} [firstFilter=filter] the first scanline filter method to use
  * @property {Uint8Array} [palette] flat RGBA entries for indexed encoding
- * @property {Uint16Array} [transparentColor] RGB samples for a tRNS chunk
+ * @property {Uint16Array} [transparentColor] grayscale or RGB samples for a tRNS chunk
  * @property {Chunk[]} [ancillary=[]] additional chunks to include in the PNG
  */
 
@@ -39,11 +40,11 @@ export function encode(options = {}, deflate, deflateOptions) {
   if (
     colorType !== ColorType.RGB &&
     colorType !== ColorType.RGBA &&
-    colorType !== ColorType.INDEXED
+    colorType !== ColorType.INDEXED &&
+    colorType !== ColorType.GRAYSCALE &&
+    colorType !== ColorType.GRAYSCALE_ALPHA
   ) {
-    throw new Error(
-      "only RGB, RGBA, or indexed colorType encoding is currently supported"
-    );
+    throw new Error(`unsupported colorType ${colorType}`);
   }
 
   if (colorType === ColorType.INDEXED) {
@@ -57,26 +58,45 @@ export function encode(options = {}, deflate, deflateOptions) {
     );
   }
 
-  return encodeImage(options, data, ancillary, deflate, deflateOptions);
+  validateRaster(data, options, colorType);
+  const raw =
+    colorType === ColorType.GRAYSCALE && (options.depth ?? 8) < 8
+      ? encodePackedRaw(data, options)
+      : undefined;
+  return encodeImage(options, data, ancillary, deflate, deflateOptions, raw);
 }
 
-function encodeImage(options, data, ancillary, deflate, deflateOptions) {
+function encodeImage(
+  options,
+  data,
+  ancillary,
+  deflate,
+  deflateOptions,
+  raw
+) {
   let trns;
   if (options.transparentColor) {
-    if ((options.colorType ?? ColorType.RGBA) !== ColorType.RGB) {
-      throw new Error("transparentColor is only supported for RGB encoding");
+    const colorType = options.colorType ?? ColorType.RGBA;
+    if (colorType !== ColorType.RGB && colorType !== ColorType.GRAYSCALE) {
+      throw new Error(
+        "transparentColor is only supported for RGB or grayscale encoding"
+      );
     }
     if (ancillary.some((chunk) => chunk.type === ChunkType.tRNS)) {
       throw new Error("tRNS is already specified by transparentColor");
     }
     const color = options.transparentColor;
-    const max = (options.depth ?? 8) === 16 ? 0xffff : 0xff;
-    if (color.length !== 3) {
-      throw new Error("RGB transparentColor must contain three samples");
+    const depth = options.depth ?? 8;
+    const max = depth === 16 ? 0xffff : (1 << depth) - 1;
+    const length = colorType === ColorType.RGB ? 3 : 1;
+    if (color.length !== length) {
+      throw new Error(
+        `${colorType === ColorType.RGB ? "RGB" : "grayscale"} transparentColor must contain ${length} sample${length === 1 ? "" : "s"}`
+      );
     }
-    trns = new Uint8Array(6);
+    trns = new Uint8Array(length * 2);
     const view = new DataView(trns.buffer);
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < length; i++) {
       if (!Number.isInteger(color[i]) || color[i] < 0 || color[i] > max) {
         throw new Error("transparentColor sample is outside the image depth");
       }
@@ -90,10 +110,41 @@ function encodeImage(options, data, ancillary, deflate, deflateOptions) {
     ...(trns ? [{ type: ChunkType.tRNS, data: trns }] : []),
     {
       type: ChunkType.IDAT,
-      data: deflate(encode_IDAT_raw(data, options), deflateOptions),
+      data: deflate(raw ?? encode_IDAT_raw(data, options), deflateOptions),
     },
     { type: ChunkType.IEND },
   ]);
+}
+
+function validateRaster(data, options, colorType) {
+  const { width, height } = options;
+  validateDimensions(width, height);
+  const depth = options.depth ?? 8;
+  const validDepth =
+    depth === 8 ||
+    depth === 16 ||
+    (colorType === ColorType.GRAYSCALE &&
+      (depth === 1 || depth === 2 || depth === 4));
+  if (!validDepth) {
+    throw new Error(`unsupported depth ${depth} for colorType ${colorType}`);
+  }
+
+  const bytesPerElement = depth === 16 ? 2 : 1;
+  const length = width * height * colorTypeToChannels(colorType);
+  if (data.BYTES_PER_ELEMENT !== bytesPerElement || data.length !== length) {
+    throw new Error(
+      `pixel data must contain ${length} ${depth}-bit samples for the image`
+    );
+  }
+
+  if (depth < 8) {
+    const max = (1 << depth) - 1;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] > max) {
+        throw new Error(`grayscale sample ${data[i]} exceeds depth ${depth}`);
+      }
+    }
+  }
 }
 
 function encodeIndexed(
@@ -115,14 +166,7 @@ function encodeIndexed(
 
   const width = options.width;
   const height = options.height;
-  if (
-    !Number.isInteger(width) ||
-    width < 1 ||
-    !Number.isInteger(height) ||
-    height < 1
-  ) {
-    throw new Error("indexed encoding requires positive integer width and height");
-  }
+  validateDimensions(width, height);
   if (data.BYTES_PER_ELEMENT !== 1 || data.length !== width * height) {
     throw new Error("indexed data must contain one Uint8 index per pixel");
   }
@@ -197,6 +241,12 @@ function encodeIndexedRaw(data, options) {
   const { width, height, depth } = options;
   if (depth === 8) return encode_IDAT_raw(data, options);
 
+  return encodePackedRaw(data, options);
+}
+
+function encodePackedRaw(data, options) {
+  const { width, height, depth } = options;
+
   const rowBytes = Math.ceil((width * depth) / 8);
   const packed = new Uint8Array(rowBytes * height);
   const mask = (1 << depth) - 1;
@@ -215,6 +265,17 @@ function encodeIndexedRaw(data, options) {
     depth: 8,
     colorType: ColorType.GRAYSCALE,
   });
+}
+
+function validateDimensions(width, height) {
+  if (
+    !Number.isInteger(width) ||
+    width < 1 ||
+    !Number.isInteger(height) ||
+    height < 1
+  ) {
+    throw new Error("encoding requires positive integer width and height");
+  }
 }
 
 function mustPrecedePalette(type) {
