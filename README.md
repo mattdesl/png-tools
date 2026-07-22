@@ -17,9 +17,8 @@ Some features:
 
 Some things that are not yet supported:
 
-- Translating IDAT chunks into pixel data (un-filtering)
-- Extracting and dealing with palettes for indexed PNGs
 - Supporting colorType encoding other than RGB and RGBA
+- Adam7 interlaced encoding or decoding
 
 > 🔧 Note: this is a low-level library for maximum flexibility. A simpler API could be built on top of this framework that makes some more opinionated trade-offs.
 
@@ -71,6 +70,26 @@ const buf = encode(image, deflate);
 ```
 
 See [examples/node-encode.js](./examples/node-encode.js) and [examples/encode-simple.js](./examples/encode-simple.js) for a full example, as well as similar examples for deno and bun.
+
+### Decode Pixel Data
+
+Like `encode()`, `decode()` expects you to provide the compression primitive so
+the library remains dependency-free and tree-shakeable.
+
+```js
+import { decode } from "png-tools";
+import { inflate } from "pako";
+
+const { data, width, height, depth, colorType, channels } = decode(
+  pngBuffer,
+  inflate
+);
+```
+
+RGB, RGBA, grayscale, grayscale-alpha, and indexed PNG color types are
+supported. Indexed pixels are expanded to RGB, or RGBA when the PNG contains a
+`tRNS` transparency chunk. The returned `colorType` and `depth` describe the
+source PNG, while `channels` describes the decoded `data` layout.
 
 ### More Encoding Options
 

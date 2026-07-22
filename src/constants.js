@@ -40,14 +40,14 @@ export const FilterMethod = Object.freeze({
  * An enum for standard PNG color types, such as RGB or RGBA.
  *
  * @enum {ColorType}
- * @property {number} GRAYSCALE (1)
+ * @property {number} GRAYSCALE (0)
  * @property {number} RGB (2)
  * @property {number} INDEXED (3)
  * @property {number} GRAYSCALE_ALPHA (4)
  * @property {number} RGBA (6)
  **/
 export const ColorType = Object.freeze({
-  GRAYSCALE: 1,
+  GRAYSCALE: 0,
   RGB: 2,
   INDEXED: 3,
   GRAYSCALE_ALPHA: 4,

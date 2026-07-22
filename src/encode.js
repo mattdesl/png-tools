@@ -26,6 +26,9 @@ export function encode(options = {}, deflate, deflateOptions) {
   const { data, ancillary = [], colorType = ColorType.RGBA } = options;
   if (!data) throw new Error(`must specify { data }`);
   if (!deflate) throw new Error(`must specify a deflate function`);
+  if (options.interlace) {
+    throw new Error("interlaced encoding is not currently supported");
+  }
   if (colorType !== ColorType.RGB && colorType !== ColorType.RGBA) {
     throw new Error(
       "only RGB or RGBA colorType encoding is currently supported"

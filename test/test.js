@@ -23,6 +23,7 @@ import {
   writeChunks,
 
   // Decoding
+  decode,
   readChunks,
   readIHDR,
   reader,
@@ -152,6 +153,164 @@ test("test png encoder filtering", async (t) => {
   }
 });
 
+test("decode round trips encoder output", async (t) => {
+  for (let i = 0; i < pngs.length; i++) {
+    const input = pngs[i];
+    const colorType = input.channels === 4 ? ColorType.RGBA : ColorType.RGB;
+    for (const filter of Object.values(FilterMethod)) {
+      const encoded = encode({ ...input, colorType, filter }, deflate);
+      const decoded = decode(encoded, inflate);
+      t.equal(decoded.width, input.width);
+      t.equal(decoded.height, input.height);
+      t.equal(decoded.depth, input.depth);
+      t.equal(decoded.colorType, colorType);
+      t.equal(decoded.channels, input.channels);
+      t.deepEqual(decoded.data, input.data, `img ${i} filter ${filter}`);
+    }
+  }
+});
+
+test("decode concatenates multiple IDAT chunks", async (t) => {
+  const input = pngs[0];
+  const encoded = encode(
+    { ...input, colorType: ColorType.RGB },
+    deflate
+  );
+  const chunks = readChunks(encoded);
+  const idat = chunks.find((chunk) => chunk.type === ChunkType.IDAT);
+  const middle = idat.data.length >> 1;
+  const split = chunks.flatMap((chunk) =>
+    chunk === idat
+      ? [
+          { type: ChunkType.IDAT, data: chunk.data.slice(0, middle) },
+          { type: ChunkType.IDAT, data: chunk.data.slice(middle) },
+        ]
+      : chunk
+  );
+  t.deepEqual(decode(writeChunks(split), inflate).data, input.data);
+});
+
+test("decode indexed PNG depths and transparency", async (t) => {
+  const palette = new Uint8Array([
+    255, 0, 0,
+    0, 255, 0,
+    0, 0, 255,
+    255, 255, 255,
+  ]);
+  const transparency = new Uint8Array([255, 160, 80, 0]);
+
+  for (const depth of [1, 2, 4, 8]) {
+    const count = 1 << Math.min(depth, 2);
+    const indices = new Uint8Array([0, 1, count - 1, 0, 1, 1, 0, count - 1]);
+    const encoded = encodeIndexed({
+      width: 4,
+      height: 2,
+      depth,
+      indices,
+      palette: palette.subarray(0, count * 3),
+      transparency: transparency.subarray(0, count),
+    });
+    const decoded = decode(encoded, inflate);
+    const expected = new Uint8Array(indices.length * 4);
+    for (let i = 0; i < indices.length; i++) {
+      const index = indices[i];
+      expected.set(palette.subarray(index * 3, index * 3 + 3), i * 4);
+      expected[i * 4 + 3] = transparency[index];
+    }
+    t.equal(decoded.colorType, ColorType.INDEXED);
+    t.equal(decoded.depth, depth);
+    t.equal(decoded.channels, 4);
+    t.deepEqual(decoded.data, expected, `${depth}-bit indexed data`);
+  }
+
+  const opaque = decode(
+    encodeIndexed({
+      width: 2,
+      height: 1,
+      depth: 1,
+      indices: new Uint8Array([1, 0]),
+      palette: palette.subarray(0, 6),
+    }),
+    inflate
+  );
+  t.equal(opaque.channels, 3);
+  t.deepEqual(opaque.data, new Uint8Array([0, 255, 0, 255, 0, 0]));
+});
+
+test("decode grayscale color types", async (t) => {
+  t.equal(ColorType.GRAYSCALE, 0, "grayscale uses the PNG color type code");
+
+  const grayscale1 = decode(
+    encodeRawPNG({
+      width: 4,
+      height: 1,
+      depth: 1,
+      colorType: ColorType.GRAYSCALE,
+      raw: new Uint8Array([0, 0b01010000]),
+    }),
+    inflate
+  );
+  t.equal(grayscale1.channels, 1);
+  t.deepEqual(grayscale1.data, new Uint8Array([0, 255, 0, 255]));
+
+  const grayscale16 = decode(
+    encodeRawPNG({
+      width: 2,
+      height: 1,
+      depth: 16,
+      colorType: ColorType.GRAYSCALE,
+      raw: new Uint8Array([0, 0x12, 0x34, 0xab, 0xcd]),
+    }),
+    inflate
+  );
+  t.deepEqual(grayscale16.data, new Uint16Array([0x1234, 0xabcd]));
+
+  const grayscaleAlpha = decode(
+    encodeRawPNG({
+      width: 2,
+      height: 1,
+      depth: 8,
+      colorType: ColorType.GRAYSCALE_ALPHA,
+      raw: new Uint8Array([0, 20, 255, 100, 80]),
+    }),
+    inflate
+  );
+  t.equal(grayscaleAlpha.channels, 2);
+  t.deepEqual(grayscaleAlpha.data, new Uint8Array([20, 255, 100, 80]));
+});
+
+test("decode validates pixel stream", async (t) => {
+  const png = writeChunks([
+    {
+      type: ChunkType.IHDR,
+      data: encode_IHDR({
+        width: 1,
+        height: 1,
+        depth: 8,
+        colorType: ColorType.RGB,
+      }),
+    },
+    { type: ChunkType.IDAT, data: deflate(new Uint8Array([5, 0, 0, 0])) },
+    { type: ChunkType.IEND },
+  ]);
+  t.throws(() => decode(png, inflate), /filter type 5/);
+  t.throws(() => decode(png), /inflate function/);
+  t.throws(
+    () =>
+      encode(
+        {
+          data: new Uint8Array([0, 0, 0]),
+          width: 1,
+          height: 1,
+          colorType: ColorType.RGB,
+          interlace: 1,
+        },
+        deflate
+      ),
+    /interlaced encoding/
+  );
+});
+
 test("comparison png decoder works", async (t) => {
   for (let i = 0; i < pngs.length; i++) {
     const buf = await fs.readFile(`test/encoded/generated-${i}.png`);
@@ -272,4 +431,53 @@ function writeChunkTable() {
       `  ${name}: 0x${chunkNameToType(name).toString(16).padStart(2, "0")},`
     );
   }
+}
+
+function encodeIndexed({
+  width,
+  height,
+  depth,
+  indices,
+  palette,
+  transparency,
+}) {
+  const rowBytes = Math.ceil((width * depth) / 8);
+  const raw = new Uint8Array((rowBytes + 1) * height);
+  const mask = (1 << depth) - 1;
+  for (let y = 0; y < height; y++) {
+    const row = y * (rowBytes + 1) + 1;
+    for (let x = 0; x < width; x++) {
+      const bit = x * depth;
+      raw[row + (bit >> 3)] |=
+        (indices[y * width + x] & mask) << (8 - depth - (bit & 7));
+    }
+  }
+  return writeChunks([
+    {
+      type: ChunkType.IHDR,
+      data: encode_IHDR({
+        width,
+        height,
+        depth,
+        colorType: ColorType.INDEXED,
+      }),
+    },
+    { type: ChunkType.PLTE, data: palette },
+    ...(transparency
+      ? [{ type: ChunkType.tRNS, data: transparency }]
+      : []),
+    { type: ChunkType.IDAT, data: deflate(raw) },
+    { type: ChunkType.IEND },
+  ]);
+}
+
+function encodeRawPNG({ width, height, depth, colorType, raw }) {
+  return writeChunks([
+    {
+      type: ChunkType.IHDR,
+      data: encode_IHDR({ width, height, depth, colorType }),
+    },
+    { type: ChunkType.IDAT, data: deflate(raw) },
+    { type: ChunkType.IEND },
+  ]);
 }
