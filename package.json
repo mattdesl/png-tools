@@ -26,6 +26,7 @@
   },
   "scripts": {
     "test": "node test/test.js",
+    "benchmark": "node --expose-gc test/benchmark-node.js",
     "test:build": "node test/generate-png-fixtures.js",
     "demo": "vite examples/",
     "demo:build": "vite build ./examples/ --outDir ../docs/demo --base='./' --emptyOutDir",

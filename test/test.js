@@ -153,6 +153,34 @@ test("test png encoder filtering", async (t) => {
   }
 });
 
+test("packed filtering matches scalar PNG filters", (t) => {
+  for (const channels of [3, 4]) {
+    const width = 7;
+    const height = 5;
+    const backing = new Uint8Array(width * height * channels + 3);
+    const data = backing.subarray(3);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (i * 73 + i * i * 19 + 41) & 255;
+    }
+
+    const colorType = channels === 4 ? ColorType.RGBA : ColorType.RGB;
+    for (const filter of Object.values(FilterMethod)) {
+      const actual = encode_IDAT_raw(data, {
+        width,
+        height,
+        colorType,
+        filter,
+      });
+      t.deepEqual(
+        actual,
+        filterScalar(data, width, height, channels, filter),
+        `${channels}-channel filter ${filter}`
+      );
+    }
+  }
+  t.end();
+});
+
 test("decode round trips encoder output", async (t) => {
   for (let i = 0; i < pngs.length; i++) {
     const input = pngs[i];
@@ -796,6 +824,44 @@ test("encode and decode fields", async (t) => {
     }
   );
 });
+
+function filterScalar(data, width, height, channels, filter) {
+  const rowBytes = width * channels;
+  const stride = rowBytes + 1;
+  const result = new Uint8Array(stride * height);
+  for (let y = 0; y < height; y++) {
+    const source = y * rowBytes;
+    const target = y * stride;
+    result[target] = filter;
+    for (let x = 0; x < rowBytes; x++) {
+      const value = data[source + x];
+      const left = x < channels ? 0 : data[source + x - channels];
+      const up = y === 0 ? 0 : data[source + x - rowBytes];
+      const upperLeft =
+        y === 0 || x < channels
+          ? 0
+          : data[source + x - rowBytes - channels];
+      let predictor = 0;
+      if (filter === FilterMethod.Sub) predictor = left;
+      else if (filter === FilterMethod.Up) predictor = up;
+      else if (filter === FilterMethod.Average) predictor = (left + up) >> 1;
+      else if (filter === FilterMethod.Paeth) {
+        const estimate = left + up - upperLeft;
+        const leftDistance = Math.abs(estimate - left);
+        const upDistance = Math.abs(estimate - up);
+        const upperLeftDistance = Math.abs(estimate - upperLeft);
+        predictor =
+          leftDistance <= upDistance && leftDistance <= upperLeftDistance
+            ? left
+            : upDistance <= upperLeftDistance
+              ? up
+              : upperLeft;
+      }
+      result[target + x + 1] = value - predictor;
+    }
+  }
+  return result;
+}
 
 // writes the chunk types in hex
 function writeChunkTable() {

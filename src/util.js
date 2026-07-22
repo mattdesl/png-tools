@@ -82,46 +82,158 @@ export function applyFilter(
   srcIdxInBytes,
   dstIdxInBytesPlusOne
 ) {
-  if (filter === FilterMethod.Paeth) {
-    for (let j = 0; j < bytesPerScanline; j++) {
-      const left =
-        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
-      const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
-      const upLeft =
-        i === 0 || j < bytesPerPixel
-          ? 0
-          : data[srcIdxInBytes + j - bytesPerScanline - bytesPerPixel];
+  const effectiveFilter = simplifyFirstRowFilter(filter, i);
+  const pixelsAlignToWords = bytesPerPixel % 4 === 0;
+  if (effectiveFilter === FilterMethod.Paeth) {
+    const above = srcIdxInBytes - bytesPerScanline;
+    let j = 0;
+    for (; j < bytesPerPixel; j++) {
       out[dstIdxInBytesPlusOne + j] =
-        data[srcIdxInBytes + j] - paethPredictor(left, up, upLeft);
+        data[srcIdxInBytes + j] - data[above + j];
     }
-  } else if (filter === FilterMethod.Sub) {
-    for (let j = 0; j < bytesPerScanline; j++) {
-      const leftPixel =
-        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
-      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - leftPixel;
+    for (; j < bytesPerScanline; j++) {
+      const left = data[srcIdxInBytes + j - bytesPerPixel];
+      const up = data[above + j];
+      const upLeft = data[above + j - bytesPerPixel];
+      const distanceLeft = Math.abs(up - upLeft);
+      const distanceUp = Math.abs(left - upLeft);
+      const distanceUpLeft = Math.abs(left + up - 2 * upLeft);
+      const predictor =
+        distanceLeft <= distanceUp && distanceLeft <= distanceUpLeft
+          ? left
+          : distanceUp <= distanceUpLeft
+            ? up
+            : upLeft;
+      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - predictor;
     }
-  } else if (filter === FilterMethod.Up) {
-    for (let j = 0; j < bytesPerScanline; j++) {
-      const upPixel = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
-      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - upPixel;
-    }
-  } else if (filter === FilterMethod.Average) {
-    for (let j = 0; j < bytesPerScanline; j++) {
-      const left =
-        j < bytesPerPixel ? 0 : data[srcIdxInBytes + j - bytesPerPixel];
-      const up = i === 0 ? 0 : data[srcIdxInBytes + j - bytesPerScanline];
-      const avg = (left + up) >> 1;
-      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j] - avg;
-    }
+    return;
   }
 
-  // Should never get here in this version as applyFilter is only called
-  // when a non-None filter is specified
-  // if (filter === FilterMethod.None) {
-  //   for (let j = 0; j < bytesPerScanline; j++) {
-  //     out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
-  //   }
-  // }
+  const input = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const output = new DataView(out.buffer, out.byteOffset, out.byteLength);
+
+  if (effectiveFilter === FilterMethod.Sub) {
+    if (pixelsAlignToWords) {
+      out.set(
+        data.subarray(srcIdxInBytes, srcIdxInBytes + bytesPerPixel),
+        dstIdxInBytesPlusOne
+      );
+      for (let j = bytesPerPixel; j < bytesPerScanline; j += 4) {
+        output.setUint32(
+          dstIdxInBytesPlusOne + j,
+          subtractPackedBytes(
+            input.getUint32(srcIdxInBytes + j),
+            input.getUint32(srcIdxInBytes + j - bytesPerPixel)
+          )
+        );
+      }
+      return;
+    }
+    let j = 0;
+    for (; j < bytesPerPixel; j++) {
+      out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
+    }
+    for (; j < bytesPerScanline; j++) {
+      out[dstIdxInBytesPlusOne + j] =
+        data[srcIdxInBytes + j] -
+        data[srcIdxInBytes + j - bytesPerPixel];
+    }
+  } else if (effectiveFilter === FilterMethod.None) {
+    out.set(
+      data.subarray(srcIdxInBytes, srcIdxInBytes + bytesPerScanline),
+      dstIdxInBytesPlusOne
+    );
+  } else if (effectiveFilter === FilterMethod.Up) {
+    const above = srcIdxInBytes - bytesPerScanline;
+    const packedLength = bytesPerScanline - (bytesPerScanline % 4);
+    let j = 0;
+    for (; j < packedLength; j += 4) {
+      output.setUint32(
+        dstIdxInBytesPlusOne + j,
+        subtractPackedBytes(
+          input.getUint32(srcIdxInBytes + j),
+          input.getUint32(above + j)
+        )
+      );
+    }
+    for (; j < bytesPerScanline; j++) {
+      out[dstIdxInBytesPlusOne + j] =
+        data[srcIdxInBytes + j] - data[above + j];
+    }
+  } else if (effectiveFilter === FilterMethod.Average) {
+    if (pixelsAlignToWords) {
+      const above = srcIdxInBytes - bytesPerScanline;
+      for (let j = 0; j < bytesPerScanline; j += 4) {
+        const left =
+          j < bytesPerPixel
+            ? 0
+            : input.getUint32(srcIdxInBytes + j - bytesPerPixel);
+        const up = i === 0 ? 0 : input.getUint32(above + j);
+        output.setUint32(
+          dstIdxInBytesPlusOne + j,
+          subtractPackedBytes(
+            input.getUint32(srcIdxInBytes + j),
+            averagePackedBytes(left, up)
+          )
+        );
+      }
+      return;
+    }
+    let j = 0;
+    if (i === 0) {
+      for (; j < bytesPerPixel; j++) {
+        out[dstIdxInBytesPlusOne + j] = data[srcIdxInBytes + j];
+      }
+      for (; j < bytesPerScanline; j++) {
+        out[dstIdxInBytesPlusOne + j] =
+          data[srcIdxInBytes + j] -
+          (data[srcIdxInBytes + j - bytesPerPixel] >> 1);
+      }
+    } else {
+      const above = srcIdxInBytes - bytesPerScanline;
+      for (; j < bytesPerPixel; j++) {
+        out[dstIdxInBytesPlusOne + j] =
+          data[srcIdxInBytes + j] - (data[above + j] >> 1);
+      }
+      for (; j < bytesPerScanline; j++) {
+        out[dstIdxInBytesPlusOne + j] =
+          data[srcIdxInBytes + j] -
+          ((data[srcIdxInBytes + j - bytesPerPixel] + data[above + j]) >> 1);
+      }
+    }
+  }
+}
+
+export function simplifyFirstRowFilter(filter, rowIndex) {
+  if (rowIndex !== 0) return filter;
+  // With no row above, Up is None and Paeth is Sub.
+  if (filter === FilterMethod.Up) return FilterMethod.None;
+  if (filter === FilterMethod.Paeth) return FilterMethod.Sub;
+  return filter;
+}
+
+const BYTE_HIGH_BITS = 0x80808080;
+const BYTE_LOW_BITS = 0x7f7f7f7f;
+
+export function addPackedBytes(value, addition) {
+  return (
+    ((value & BYTE_LOW_BITS) + (addition & BYTE_LOW_BITS)) ^
+    ((value ^ addition) & BYTE_HIGH_BITS)
+  );
+}
+
+// Compute four independent modulo-256 byte subtractions without allowing a
+// borrow to cross byte boundaries.
+export function subtractPackedBytes(value, subtraction) {
+  return (
+    ((value | BYTE_HIGH_BITS) - (subtraction & BYTE_LOW_BITS)) ^
+    (~(value ^ subtraction) & BYTE_HIGH_BITS)
+  );
+}
+
+// Compute floor((a + b) / 2) independently in each packed byte.
+export function averagePackedBytes(first, second) {
+  return (first & second) + (((first ^ second) & 0xfefefefe) >>> 1);
 }
 
 export function paethPredictor(left, above, upLeft) {

@@ -1,10 +1,12 @@
 import crc32 from "./crc32.js";
-import { ChunkType, ColorType, PNG_HEADER } from "./constants.js";
+import { ChunkType, ColorType, FilterMethod, PNG_HEADER } from "./constants.js";
 import { chunkTypeToName, decode_IHDR } from "./chunks.js";
 import {
+  addPackedBytes,
+  averagePackedBytes,
   colorTypeToChannels,
   flattenBuffers,
-  paethPredictor,
+  simplifyFirstRowFilter,
 } from "./util.js";
 
 /**
@@ -94,9 +96,7 @@ export function decode(buf, inflate, options) {
   }
 
   const bytesPerPixel = Math.max(1, Math.ceil((sourceChannels * depth) / 8));
-  unfilter(raw, height, rowBytes, bytesPerPixel);
-
-  const packed = raw.subarray(0, rowBytes * height);
+  const packed = unfilter(raw, height, rowBytes, bytesPerPixel);
   let data;
   let resultPalette;
   let transparentColor;
@@ -208,51 +208,119 @@ function validateIHDR(meta) {
   }
 }
 
-// Decode each scanline in the inflater's output, then compact the whole image
-// in place to discard filter bytes. This avoids another full image buffer.
+// Decode and compact each row in place. The compact destination always precedes
+// the filtered source, so unread input cannot be overwritten.
 function unfilter(data, height, rowBytes, bytesPerPixel) {
   const stride = rowBytes + 1;
+  const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const pixelsAlignToWords = bytesPerPixel % 4 === 0;
   for (let y = 0; y < height; y++) {
     const row = y * stride;
     const filter = data[row];
-    const start = row + 1;
+    const source = row + 1;
+    const target = y * rowBytes;
     if (filter > 4) throw new Error(`Invalid PNG filter type ${filter}`);
-    if (filter === 0) continue;
+    const effectiveFilter = simplifyFirstRowFilter(filter, y);
 
-    if (filter === 1) {
-      for (let x = bytesPerPixel; x < rowBytes; x++) {
-        data[start + x] += data[start + x - bytesPerPixel];
+    if (effectiveFilter === FilterMethod.None) {
+      data.copyWithin(target, source, source + rowBytes);
+    } else if (effectiveFilter === FilterMethod.Sub) {
+      if (pixelsAlignToWords) {
+        data.copyWithin(target, source, source + bytesPerPixel);
+        for (let x = bytesPerPixel; x < rowBytes; x += 4) {
+          dataView.setUint32(
+            target + x,
+            addPackedBytes(
+              dataView.getUint32(source + x),
+              dataView.getUint32(target + x - bytesPerPixel)
+            )
+          );
+        }
+        continue;
       }
-    } else if (filter === 2) {
-      if (y === 0) continue;
-      for (let x = 0; x < rowBytes; x++) {
-        data[start + x] += data[start + x - stride];
+      let x = 0;
+      for (; x < bytesPerPixel; x++) data[target + x] = data[source + x];
+      for (; x < rowBytes; x++) {
+        data[target + x] =
+          data[source + x] + data[target + x - bytesPerPixel];
       }
-    } else if (filter === 3) {
-      for (let x = 0; x < rowBytes; x++) {
-        const i = start + x;
-        const left = x < bytesPerPixel ? 0 : data[i - bytesPerPixel];
-        const above = y === 0 ? 0 : data[i - stride];
-        data[i] += (left + above) >> 1;
+    } else if (effectiveFilter === FilterMethod.Up) {
+      const above = target - rowBytes;
+      const packedLength = rowBytes - (rowBytes % 4);
+      let x = 0;
+      for (; x < packedLength; x += 4) {
+        dataView.setUint32(
+          target + x,
+          addPackedBytes(
+            dataView.getUint32(source + x),
+            dataView.getUint32(above + x)
+          )
+        );
+      }
+      for (; x < rowBytes; x++) {
+        data[target + x] = data[source + x] + data[above + x];
+      }
+    } else if (effectiveFilter === FilterMethod.Average) {
+      if (pixelsAlignToWords) {
+        const above = target - rowBytes;
+        for (let x = 0; x < rowBytes; x += 4) {
+          const left =
+            x < bytesPerPixel
+              ? 0
+              : dataView.getUint32(target + x - bytesPerPixel);
+          const up = y === 0 ? 0 : dataView.getUint32(above + x);
+          dataView.setUint32(
+            target + x,
+            addPackedBytes(
+              dataView.getUint32(source + x),
+              averagePackedBytes(left, up)
+            )
+          );
+        }
+        continue;
+      }
+      let x = 0;
+      if (y === 0) {
+        for (; x < bytesPerPixel; x++) data[target + x] = data[source + x];
+        for (; x < rowBytes; x++) {
+          data[target + x] =
+            data[source + x] + (data[target + x - bytesPerPixel] >> 1);
+        }
+      } else {
+        const above = target - rowBytes;
+        for (; x < bytesPerPixel; x++) {
+          data[target + x] = data[source + x] + (data[above + x] >> 1);
+        }
+        for (; x < rowBytes; x++) {
+          data[target + x] =
+            data[source + x] +
+            ((data[target + x - bytesPerPixel] + data[above + x]) >> 1);
+        }
       }
     } else {
-      for (let x = 0; x < rowBytes; x++) {
-        const i = start + x;
-        const left = x < bytesPerPixel ? 0 : data[i - bytesPerPixel];
-        const above = y === 0 ? 0 : data[i - stride];
-        const upperLeft =
-          y === 0 || x < bytesPerPixel
-            ? 0
-            : data[i - stride - bytesPerPixel];
-        data[i] += paethPredictor(left, above, upperLeft);
+      const above = target - rowBytes;
+      let x = 0;
+      for (; x < bytesPerPixel; x++) {
+        data[target + x] = data[source + x] + data[above + x];
+      }
+      for (; x < rowBytes; x++) {
+        const left = data[target + x - bytesPerPixel];
+        const up = data[above + x];
+        const upperLeft = data[above + x - bytesPerPixel];
+        const distanceLeft = Math.abs(up - upperLeft);
+        const distanceUp = Math.abs(left - upperLeft);
+        const distanceUpperLeft = Math.abs(left + up - 2 * upperLeft);
+        const predictor =
+          distanceLeft <= distanceUp && distanceLeft <= distanceUpperLeft
+            ? left
+            : distanceUp <= distanceUpperLeft
+              ? up
+              : upperLeft;
+        data[target + x] = data[source + x] + predictor;
       }
     }
   }
-
-  for (let y = 0; y < height; y++) {
-    const start = y * stride + 1;
-    data.copyWithin(y * rowBytes, start, start + rowBytes);
-  }
+  return data.subarray(0, rowBytes * height);
 }
 
 function unpack16(data) {
