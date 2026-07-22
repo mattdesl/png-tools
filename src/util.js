@@ -124,7 +124,7 @@ export function applyFilter(
   // }
 }
 
-function paethPredictor(left, above, upLeft) {
+export function paethPredictor(left, above, upLeft) {
   let paeth = left + above - upLeft;
   let pLeft = Math.abs(paeth - left);
   let pAbove = Math.abs(paeth - above);

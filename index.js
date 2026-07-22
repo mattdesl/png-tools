@@ -21,7 +21,7 @@ import {
   writeChunks,
 } from "./src/encode.js";
 
-import { readChunks, readIHDR, reader } from "./src/decode.js";
+import { decode, readChunks, readIHDR, reader } from "./src/decode.js";
 
 import {
   encode_IDAT_raw,
@@ -62,6 +62,7 @@ export {
   writeChunks,
 
   // Decoding
+  decode,
   readChunks,
   readIHDR,
   reader,

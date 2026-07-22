@@ -17,9 +17,7 @@ Some features:
 
 Some things that are not yet supported:
 
-- Translating IDAT chunks into pixel data (un-filtering)
-- Extracting and dealing with palettes for indexed PNGs
-- Supporting colorType encoding other than RGB and RGBA
+- Adam7 interlaced encoding or decoding
 
 > 🔧 Note: this is a low-level library for maximum flexibility. A simpler API could be built on top of this framework that makes some more opinionated trade-offs.
 
@@ -72,9 +70,80 @@ const buf = encode(image, deflate);
 
 See [examples/node-encode.js](./examples/node-encode.js) and [examples/encode-simple.js](./examples/encode-simple.js) for a full example, as well as similar examples for deno and bun.
 
+### Decode Pixel Data
+
+Pass a pngBuffer and your own INFLATE (e.g. [pako](https://npmjs.com/package/pako)) and get back RGBA pixel data.
+
+```js
+import { decode, ColorType } from "png-tools";
+import { inflate } from "pako";
+
+const { data, width, height, depth } = decode(pngBuffer, inflate);
+```
+
+By default, the data is expanded to `RGBA`, the data will be `Uint8Array` if `depth` is 8, or `Uint16Array` if `depth` is 16.
+
+You can also request to preserve the source data format, but this will require you to handle indexing and transparency:
+
+```js
+const {
+  data,
+  palette,
+  width,
+  height,
+  depth,
+  colorType,
+  channels,
+  transparentColor,
+} = decode(pngBuffer, inflate, {
+  preserveFormat: true,
+  /* other inflate options */
+});
+
+const pixelIndex = 0;
+
+if (colorType === ColorType.INDEXED) {
+  // indexed palette is always normalised to RGBA
+  const index = data[pixelIndex];
+  const red = palette[index * 4];
+  const alpha = palette[index * 4 + 3]; // expanded to 0xff
+} else {
+  // might be grayscale, gray-alpha, rgba or rgb
+  const v = data[pixelIndex];
+  // any pixels that match the transparent color, if it exists, should be made transparent
+  if (transparentColor) {
+    if (colorType === ColorType.GRAYSCALE) {
+      console.log("Transparent gray:", transparentColor[0]);
+    } else {
+      console.log("Transparent RGB:", transparentColor);
+    }
+  }
+}
+```
+
+### Encode Indexed Pixel Data
+
+To encode an indexed image, pass indices and flat RGBA palette both as `Uint8Array`. If `palette` is passed, `ColorType.INDEXED` is implied, and the packed depth is implied from the given palette size. `palette` cannot be larger than 256 colors.
+
+```js
+const png = encode(
+  {
+    width,
+    height,
+    data: indices,
+    palette: rgbaPalette,
+  },
+  deflate,
+);
+```
+
 ### More Encoding Options
 
-You can encode RGB or RGBA, and 8 or 16 bits, with a different filter method that is applied to all scanlines. You can also specify a list of `ancillary` chunks which are inserted prior to image data (IDAT) chunks.
+All PNG `colorType` options can be encoded with different `depth` – grayscale supports 1, 2, 4, 8, or 16 bits; indexed supports 1, 2, 4, or 8 bits; and grayscale-alpha, RGB, and RGBA
+support 8 or 16 bits. Low-bit grayscale input uses one unpacked `Uint8` sample
+per pixel with values in the source range—for example, `0` through `3` at 2-bit depth.
+
+Pass `filter` for a different all-scanline filter, or pass `ancillary` for additional chunks inserted before image data (IDAT).
 
 ```js
 import {
@@ -342,7 +411,7 @@ buf = encode(
     height: 128,
     filter: FilterMethod.None,
   },
-  deflate
+  deflate,
 );
 ```
 
