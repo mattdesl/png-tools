@@ -10,6 +10,7 @@
     "url": "https://github.com/mattdesl"
   },
   "devDependencies": {
+    "esdoc2-ecmascript-proposal-plugin": "^2.1.1",
     "buffer": "^6.0.3",
     "canvas-dimensions": "^1.0.0",
     "canvas-sketch": "^0.7.7",
@@ -60,7 +61,5 @@
   "bugs": {
     "url": "https://github.com/mattdesl/png-tools/issues"
   },
-  "dependencies": {
-    "esdoc2-ecmascript-proposal-plugin": "^2.1.1"
-  }
+  "dependencies": {}
 }
